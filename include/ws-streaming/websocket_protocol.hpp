@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -116,7 +117,8 @@ namespace wss
             unsigned flags;                             /**< The value of the header's flags vield. */
             unsigned opcode;                            /**< The value of the header's opcode field. */
             std::size_t payload_size;                   /**< The claimed payload size in bytes. */
-            std::optional<std::uint32_t> masking_key;   /**< The 32-bit masking key, or std::nullopt if the header indicates the payload is not masked. */
+            bool is_masked;                             /**< True if the payload data is masked. */
+            std::array<std::uint8_t, 4> masking_key;    /**< The masking key, if the payload data is masked. */
         };
 
         /**

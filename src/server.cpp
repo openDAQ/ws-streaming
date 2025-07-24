@@ -88,18 +88,40 @@ void wss::server::on_websocket_connection(boost::asio::ip::tcp::socket& socket)
 {
     std::cout << "websocket connection!" << std::endl;
 
-    auto peer = std::make_shared<wss::peer>(std::move(socket));
+    auto peer = std::make_shared<wss::peer>(
+        std::move(socket),
+        false);
 
     peers.emplace_back(
         peer,
-        peer->on_disconnected.connect(std::bind(&server::on_peer_disconnected, this, peer)));
+        peer->on_data_received.connect(std::bind(&server::on_peer_data_received, this, peer, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3)),
+        peer->on_metadata_received.connect(std::bind(&server::on_peer_metadata_received, this, peer, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3)),
+        peer->on_disconnected.connect(std::bind(&server::on_peer_disconnected, this, peer, std::placeholders::_1)));
 
     peer->run();
 }
 
-void wss::server::on_peer_disconnected(const std::shared_ptr<peer>& peer)
+void wss::server::on_peer_data_received(
+    const std::shared_ptr<peer>& peer,
+    unsigned signo,
+    const std::uint8_t *data,
+    std::size_t size)
 {
-    std::cout << "server removing peer from list" << std::endl;
+    std::cout << "server received data from peer (" << signo << "): " << size << std::endl;
+}
+
+void wss::server::on_peer_metadata_received(
+    const std::shared_ptr<peer>& peer,
+    unsigned signo,
+    const std::string& method,
+    const nlohmann::json& params)
+{
+    std::cout << "server received metadata from peer (" << method << "): " << params.dump() << std::endl;
+}
+
+void wss::server::on_peer_disconnected(const std::shared_ptr<peer>& peer, const boost::system::error_code& ec)
+{
+    std::cout << "server removing peer from list (disconnect ec " << ec << ')' << std::endl;
 
     peers.remove_if([&](const peer_entry& entry)
     {

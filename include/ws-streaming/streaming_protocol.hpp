@@ -65,5 +65,34 @@ namespace wss
                 return 2 * sizeof(std::uint32_t);
             }
         }
+
+        /**
+         * A structure containing values from a decoded WebSocket Streaming Protocol packet
+         * header. The decode_header() function populates and returns an instance of this
+         * structure.
+         */
+        struct decoded_header
+        {
+            std::size_t header_size;                    /**< The size of the header in bytes. */
+            unsigned signo;                             /**< The signal number, which may be zero for metadata. */
+            unsigned type;                              /**< The type of packet; see packet_type for possible values. */
+            std::size_t payload_size;                   /**< The claimed payload size in bytes. */
+        };
+
+        /**
+         * Decodes a WebSocket Streaming Protocol packet header.
+         *
+         * @param data A pointer to the WebSocket Streaming Protocol packet data. The data may be
+         *     truncated; i.e., it is safe to call this function even if it's not known whether
+         *     the data contains a complete and valid packet. In this case the returned
+         *     decoded_header::header_size member is set to 0 (see the Returns description).
+         * @param size The size of the data pointed to by @p data in bytes.
+         *
+         * @return A decoded_header structure containing the values of the packet's fields. If the
+         *     pointed-to data contains a complete packet (including payload), the returned
+         *     decoded_header::header_size member is set to the actual size of the header. If the
+         *     data is truncated, the returned decoded_header::header_size member is set to 0.
+         */
+        decoded_header decode_header(const std::uint8_t *data, std::size_t size) noexcept;
     }
 }

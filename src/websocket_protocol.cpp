@@ -1,5 +1,6 @@
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 
 #include <ws-streaming/websocket_protocol.hpp>
 
@@ -14,7 +15,7 @@ wss::websocket_protocol::decode_header(const std::uint8_t *data, std::size_t siz
 
     header.opcode = data[0] & 0xF;
     header.flags = data[0] & 0xF0;
-    bool is_masked = 0 != (data[1] & 0x80);
+    header.is_masked = 0 != (data[1] & 0x80);
     header.payload_size = data[1] & 0x7F;
 
     data += 2;
@@ -52,19 +53,18 @@ wss::websocket_protocol::decode_header(const std::uint8_t *data, std::size_t siz
         size -= sizeof(std::uint64_t);
     }
 
-    if (is_masked)
+    if (header.is_masked)
     {
-        if (size < sizeof(decltype(header.masking_key)::value_type))
+        if (size < header.masking_key.size())
             return header;
 
-        header.masking_key =
-            (static_cast<std::uint32_t>(data[0]) << 24) |
-            (static_cast<std::uint32_t>(data[1]) << 16) |
-            (static_cast<std::uint32_t>(data[2]) << 8) |
-            data[3];
+        std::memcpy(
+            header.masking_key.data(),
+            data,
+            header.masking_key.size());
 
-        data += sizeof(decltype(header.masking_key)::value_type);
-        size -= sizeof(decltype(header.masking_key)::value_type);
+        data += header.masking_key.size();
+        size -= header.masking_key.size();
     }
 
     if (size >= header.payload_size)

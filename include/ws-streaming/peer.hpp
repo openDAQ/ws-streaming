@@ -3,6 +3,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
+#include <random>
 #include <string>
 #include <vector>
 
@@ -12,6 +14,7 @@
 #include <nlohmann/json.hpp>
 
 #include <ws-streaming/streaming_protocol.hpp>
+#include <ws-streaming/websocket_protocol.hpp>
 
 namespace wss
 {
@@ -44,6 +47,9 @@ namespace wss
              * socket operations will be dispatched using the socket's execution context.
              *
              * @param socket A socket which should be connected to the remote peer.
+             * @param is_client True if this object should act as a client. This determines
+             *     whether transmitted WebSocket frames are masked according to section 5.3 of RFC
+             *     6455.
              * @param rx_buffer_size The desired size of the receive buffer. The receive buffer
              *     does not grow, so this value sets an upper bound on the size of frames the peer
              *     can receive: larger frames will result in an error and cause the connection to
@@ -63,8 +69,11 @@ namespace wss
              */
             peer(
                 boost::asio::ip::tcp::socket socket,
+                bool is_client,
                 std::size_t rx_buffer_size = default_rx_buffer_size,
                 std::size_t tx_buffer_size = default_tx_buffer_size);
+
+            ~peer();
 
             void run();
 
@@ -105,6 +114,23 @@ namespace wss
             }
 
             /**
+             * A signal raised when a WebSocket Streaming Protocol data packet is received. The
+             * signal is raised from the execution context of the socket.
+             *
+             * @param signo The signal number to which the data applies.
+             * @param data A pointer to the payload data.
+             * @param size The number of payload data bytes pointed to by @p data.
+             *
+             * @throws Any exception thrown by a connected slot is silently ignored.
+             */
+            boost::signals2::signal<
+                void(
+                    unsigned signo,
+                    const std::uint8_t *data,
+                    std::size_t size)
+            > on_data_received;
+
+            /**
              * A signal raised when a WebSocket Streaming Protocol metadata packet is received.
              * The signal is raised from the execution context of the socket.
              *
@@ -122,23 +148,6 @@ namespace wss
             > on_metadata_received;
 
             /**
-             * A signal raised when a WebSocket Streaming Protocol data packet is received. The
-             * signal is raised from the execution context of the socket.
-             *
-             * @param signo The signal number to which the data applies.
-             * @param data A pointer to the payload data.
-             * @param size The number of payload data bytes pointed to by @p data.
-             *
-             * @throws Any exception thrown by a connected slot is silently ignored.
-             */
-            boost::signals2::signal<
-                void(
-                    unsigned signo,
-                    const void *data,
-                    std::size_t size)
-            > on_data_received;
-
-            /**
              * A signal raised when the connection is closed. This can occur due to an error, or
              * when close() is called. The signal is raised from the execution context of the
              * socket.
@@ -152,27 +161,57 @@ namespace wss
 
         private:
 
-            void do_receive();
+            void do_wait_rx();
             void do_wait_tx();
+            void do_shutdown();
 
-            void finish_receive(const boost::system::error_code& ec, std::size_t bytes_transferred);
+            void finish_wait_rx(const boost::system::error_code& wait_ec);
             void finish_wait_tx(const boost::system::error_code& wait_ec);
+
+            void process_websocket_frame(
+                const websocket_protocol::decoded_header& header,
+                std::uint8_t *data,
+                std::size_t size,
+                boost::system::error_code& ec);
+
+            void process_packet(const std::uint8_t *data, std::size_t size);
+            void process_data_packet(unsigned signo, const std::uint8_t *data, std::size_t size);
+            void process_metadata_packet(unsigned signo, const std::uint8_t *data, std::size_t size);
 
             template <typename ConstBufferSequence>
             void send_packet(
                 unsigned signo,
                 unsigned type,
-                const ConstBufferSequence& payload);
+                const ConstBufferSequence& payload,
+                const std::optional<std::size_t>& payload_size);
 
             template <typename ConstBufferSequence>
-            boost::system::error_code write(const ConstBufferSequence& buffers);
+            void send_websocket_frame(
+                unsigned opcode,
+                const ConstBufferSequence& payload,
+                const std::optional<std::size_t>& payload_size,
+                bool do_shutdown_after = false);
 
             template <typename ConstBufferSequence>
-            boost::system::error_code enqueue(const ConstBufferSequence& buffers);
+            void write(
+                const ConstBufferSequence& buffers,
+                const std::optional<std::size_t>& size,
+                bool do_shutdown_after);
+
+            template <typename ConstBufferSequence>
+            void enqueue(
+                const ConstBufferSequence& buffers,
+                std::size_t size,
+                bool do_shutdown_after);
 
             void close(const boost::system::error_code& ec);
 
             boost::asio::ip::tcp::socket socket;
+            bool is_client;
+
+            std::random_device random_device;
+            std::mt19937 random_generator;
+            std::uniform_int_distribution<std::uint32_t> random_ints;
 
             std::vector<std::uint8_t> rx_buffer;
             std::vector<std::uint8_t> tx_buffer;
@@ -181,6 +220,7 @@ namespace wss
             std::size_t tx_buffer_bytes = 0;
 
             bool waiting_tx = false;
+            std::size_t shutdown_after = 0;
 
             boost::system::error_code close_ec;
     };
