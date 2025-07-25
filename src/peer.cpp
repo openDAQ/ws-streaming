@@ -4,14 +4,18 @@
 #include <cstdint>
 #include <cstring>
 #include <functional>
-#include <iostream>
 #include <limits>
+#include <optional>
 #include <string>
 #include <utility>
 
-#include <boost/asio.hpp>
+#include <boost/asio/buffer.hpp>
+#include <boost/asio/error.hpp>
+#include <boost/asio/socket_base.hpp>
+#include <boost/asio/ip/tcp.hpp>
 #include <boost/beast/core/buffers_cat.hpp>
 #include <boost/beast/core/buffers_suffix.hpp>
+#include <boost/system/error_code.hpp>
 
 #include <nlohmann/json.hpp>
 
@@ -20,35 +24,16 @@
 #include <ws-streaming/websocket_protocol.hpp>
 
 wss::peer::peer(
-        boost::asio::ip::tcp::socket socket,
+        boost::asio::ip::tcp::socket&& socket,
         bool is_client,
         std::size_t rx_buffer_size,
         std::size_t tx_buffer_size)
     : socket{std::move(socket)}
-    , is_client{is_client}
-    , random_generator(std::random_device()())
     , rx_buffer(rx_buffer_size)
     , tx_buffer(tx_buffer_size)
 {
     this->socket.non_blocking(true);
-
-    // Ask the operating system to make the send buffer big enough to hold the entire
-    // requested backlog (or at least the biggest value that will fit in an 'int').
-    // TODO: Derate the user-space buffer according to how much the operating system
-    // will give us.
-    boost::system::error_code ec;
-    this->socket.set_option(
-        boost::asio::socket_base::send_buffer_size{
-            static_cast<int>(
-                std::min<std::size_t>(
-                    tx_buffer_size,
-                    std::numeric_limits<int>::max()))},
-        ec);
-}
-
-wss::peer::~peer()
-{
-    std::cout << "peer destroyed" << std::endl;
+    set_send_buffer_size(tx_buffer_size);
 }
 
 void wss::peer::run()
@@ -56,7 +41,7 @@ void wss::peer::run()
     do_wait_rx();
 }
 
-void wss::peer::close()
+void wss::peer::stop()
 {
     boost::system::error_code ec;
     socket.close(ec);
@@ -87,6 +72,18 @@ void wss::peer::send_metadata(
         sizeof(encoding) + payload.size());
 }
 
+void wss::peer::set_send_buffer_size(std::size_t size)
+{
+    // Clamp the requested tx buffer size to the largest value we can store in an int.
+    if (size > std::numeric_limits<int>::max())
+        size = std::numeric_limits<int>::max();
+
+    // Ask the operating system to hold as much as possible.
+    boost::system::error_code ec;
+    auto option = boost::asio::socket_base::send_buffer_size{static_cast<int>(size)};
+    socket.set_option(option, ec);
+}
+
 void wss::peer::do_wait_rx()
 {
     socket.async_wait(
@@ -109,20 +106,9 @@ void wss::peer::do_wait_tx()
     waiting_tx = true;
 }
 
-void wss::peer::do_shutdown()
-{
-    boost::system::error_code ec;
-
-    socket.shutdown(socket.shutdown_both, ec);
-
-    if (ec)
-        return close(ec);
-}
-
 void wss::peer::finish_wait_rx(const boost::system::error_code& wait_ec)
 {
     boost::system::error_code receive_ec;
-    std::cout << "peer readable " << wait_ec << std::endl;
 
     // Was there an error waiting for the socket to become readable?
     if (wait_ec)
@@ -136,7 +122,6 @@ void wss::peer::finish_wait_rx(const boost::system::error_code& wait_ec)
         0,
         receive_ec);
 
-    std::cout << "receive() returned " << bytes_received << std::endl;
     if (bytes_received == 0)
         return close({});
 
@@ -214,7 +199,7 @@ void wss::peer::finish_wait_tx(const boost::system::error_code& wait_ec)
     {
         shutdown_after -= std::min(bytes_sent, shutdown_after);
         if (shutdown_after == 0)
-            return do_shutdown();
+            return close();
     }
 
     if (bytes_sent < tx_buffer_bytes)
@@ -243,24 +228,16 @@ void wss::peer::process_websocket_frame(
         // React to close frames by sending our own close frame and then signaling the caller to disconnect.
         case websocket_protocol::opcodes::CLOSE:
         {
-            std::cout << "peer received close frame" << std::endl;
             send_websocket_frame(
                 websocket_protocol::opcodes::CLOSE,
                 boost::asio::const_buffer(),
                 0,
                 true);
-
-            // XXX TODO
-            //std::array<std::uint8_t, 2> close_frame = { 0x88, 0x00 };
-            //return socket.async_send(
-            //    boost::asio::buffer(close_frame),
-            //    std::bind(&peer::finish_close_write, shared_from_this(), _1, _2));
             break;
         }
 
         case websocket_protocol::opcodes::PING:
         {
-            std::cout << "peer received ping frame" << std::endl;
             send_websocket_frame(
                 websocket_protocol::opcodes::PONG,
                 boost::asio::const_buffer(data, size),
@@ -269,10 +246,7 @@ void wss::peer::process_websocket_frame(
         }
 
         case websocket_protocol::opcodes::TEXT:
-        {
-            std::cout << "peer received text: '" << std::string(reinterpret_cast<const char *>(data), size) << '\'' << std::endl;
             break;
-        }
 
         case websocket_protocol::opcodes::BINARY:
         {
@@ -321,12 +295,10 @@ void wss::peer::process_data_packet(unsigned signo, const std::uint8_t *data, st
 
 void wss::peer::process_metadata_packet(unsigned signo, const std::uint8_t *data, std::size_t size)
 {
-    std::cout << "handling metadata packet, size is " << size << std::endl;
     if (size < sizeof(std::uint32_t))
         return;
 
     std::uint32_t encoding = data[0] | (data[1] << 8) | (data[2] << 16) | (data[3] << 24);
-    std::cout << "encoding is " << encoding << std::endl;
 
     nlohmann::json metadata;
     switch (encoding)
@@ -446,7 +418,7 @@ void wss::peer::write(
     if (bytes_sent == calculated_size)
     {
         if (do_shutdown_after)
-            return do_shutdown();
+            return close();
         return;
     }
 
@@ -484,13 +456,12 @@ void wss::peer::enqueue(
 
 void wss::peer::close(const boost::system::error_code& ec)
 {
-    std::cout << "close() called with ec " << ec << std::endl;
-
     if (!socket.is_open())
         return;
 
-    std::cout << "peer CLOSING with ec " << ec << std::endl;
+    boost::system::error_code close_ec;
+    socket.shutdown(socket.shutdown_both, close_ec);
+    socket.close(close_ec);
 
-    socket.close();
-    on_disconnected(ec);
+    on_closed(ec);
 }

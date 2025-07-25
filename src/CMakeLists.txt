@@ -13,6 +13,15 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
 # TODO REMOVEME!!!
 target_compile_options(${PROJECT_NAME} PUBLIC -Wall -pedantic)
 
+target_compile_definitions(
+    ${PROJECT_NAME}
+        PRIVATE
+            WS_STREAMING_VERSION_MAJOR="${PROJECT_VERSION_MAJOR}"
+            WS_STREAMING_VERSION_MINOR="${PROJECT_VERSION_MINOR}"
+            WS_STREAMING_VERSION_PATCH="${PROJECT_VERSION_PATCH}"
+            WS_STREAMING_VERSION_TWEAK="${PROJECT_VERSION_TWEAK}"
+)
+
 target_include_directories(
     ${PROJECT_NAME}
         PUBLIC

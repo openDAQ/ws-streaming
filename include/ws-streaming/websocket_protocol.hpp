@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <string>
 
 namespace wss
 {
@@ -136,5 +137,17 @@ namespace wss
          *     data is truncated, the returned decoded_header::header_size member is set to 0.
          */
         decoded_header decode_header(const std::uint8_t *data, std::size_t size) noexcept;
+
+        /**
+         * Calculates the correct Sec-WebSocket-Accept HTTP header value for an HTTP WebSocket
+         * upgrade request.
+         *
+         * @param sec_websocket_key The value of the Sec-WebSocket-Key header provided by the
+         *     client.
+         *
+         * @return The value of the Sec-WebSocket-Accept header which the server should return to
+         *     the client.
+         */
+        std::string get_response_key(const std::string& sec_websocket_key);
     }
 }

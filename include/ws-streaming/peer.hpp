@@ -4,12 +4,13 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
-#include <random>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/signals2/signal.hpp>
+#include <boost/system/error_code.hpp>
 
 #include <nlohmann/json.hpp>
 
@@ -19,37 +20,52 @@
 namespace wss
 {
     /**
-     * Implements the transport layer of a WebSocket Streaming connection to a remote peer.
-     * Transport connections are symmetric, and support asynchronous, bidirectional exchange of
-     * WebSocket Streaming Protocol packets. To send packets, callers use the send() function. To
-     * receive packets, callers connect to the on_metadata_received and on_data_received signals.
+     * Implements the transport layer of a WebSocket Streaming Protocol connection to a remote
+     * peer. Transport connections are symmetric, and support asynchronous, bidirectional exchange
+     * of WebSocket Streaming Protocol packets. To send packets, callers use the send_data() and
+     * send_metadata() functions. To receive packets, callers connect to the on_data_received and
+     * on_metadata_received signals. The on_closed signal can be used to detect when the
+     * connection has been closed, either gracefully or due to an error.
      *
      * Peer objects are constructed with, and take ownership of, a connected Boost.Asio socket,
-     * and must always be managed by a std::shared_ptr. The on_disconnected signal can be used to
-     * detect when the connection has been closed, whether gracefully or due to an error.
+     * and must always be managed by a std::shared_ptr, following the normal Boost.Asio pattern.
+     * When run() is called, the peer object performs asynchronous I/O operations using the
+     * execution context of the provided socket. This execution context must provide sequential
+     * execution, i.e. in the terminology of Boost.Asio, it must be an explicit or implicit
+     * strand. In addition, the caller must ensure no member functions are called concurrently
+     * with each other or with an asynchronous completion handler. More explicitly stated, this
+     * class is not thread-safe.
+     *
+     * Because peer objects must always be managed by a std::shared_ptr, a caller cannot directly
+     * destroy a peer object. Calling the stop() function begins the process of destroying a peer:
+     * all pending asynchronous I/O operations are canceled, and the on_closed signal is raised.
+     * The peer is then destroyed when the caller releases all shared-pointer references to it and
+     * once all asynchronous completion handlers have been called.
+     *
+     * @todo When acting as a client, outgoing WebSocket frames are not masked, in violation of
+     *     section 5.3 of RFC 6455. This will not be compatible with third-party servers that
+     *     enforce the masking requirement. Masking has a significant performance cost, in that it
+     *     makes zero-copy impossible. Ideally, we should mask by default, but also negotiate with
+     *     the server to disable masking if the server allows it.
+     *
+     * @todo This class is coupled with boost::asio::tcp and cannot currently be used with other
+     *     stream socket types such as UNIX domain sockets. It should either be templated or use a
+     *     polymorphic socket adapter so it can work with any stream socket type.
      */
     class peer : public std::enable_shared_from_this<peer>
     {
         public:
 
             /**
-             * The default value for the receive buffer size passed to the constructor.
-             */
-            static constexpr std::size_t default_rx_buffer_size = 1024 * 1024;
-
-            /**
-             * The default value for the transmit buffer size passed to the constructor.
-             */
-            static constexpr std::size_t default_tx_buffer_size = 32 * 1024 * 1024;
-
-            /**
-             * Constructs a peer object, taking ownership of the specified socket. Asynchronous
-             * socket operations will be dispatched using the socket's execution context.
+             * Constructs a peer object, taking ownership of the specified socket. No asynchronous
+             * operations are started until run() is called. Asynchronous socket operations will
+             * be dispatched using the socket's execution context.
              *
-             * @param socket A socket which should be connected to the remote peer.
+             * @param socket A socket, which the constructed object takes ownership of. The socket
+             *     should be connected to the remote peer.
              * @param is_client True if this object should act as a client. This determines
              *     whether transmitted WebSocket frames are masked according to section 5.3 of RFC
-             *     6455.
+             *     6455. The masking feature is not currently implemented.
              * @param rx_buffer_size The desired size of the receive buffer. The receive buffer
              *     does not grow, so this value sets an upper bound on the size of frames the peer
              *     can receive: larger frames will result in an error and cause the connection to
@@ -68,50 +84,60 @@ namespace wss
              *     non-blocking mode.
              */
             peer(
-                boost::asio::ip::tcp::socket socket,
+                boost::asio::ip::tcp::socket&& socket,
                 bool is_client,
-                std::size_t rx_buffer_size = default_rx_buffer_size,
-                std::size_t tx_buffer_size = default_tx_buffer_size);
+                std::size_t rx_buffer_size = 1024 * 1024,
+                std::size_t tx_buffer_size = 32 * 1024 * 1024);
 
-            ~peer();
-
+            /**
+             * Activates the peer by starting asynchronous I/O operations using the socket's
+             * execution context. To stop the peer later, call stop(), which cancels all
+             * asynchronous I/O operations, allowing the object to be destroyed.
+             */
             void run();
 
             /**
              * Closes the connection. The socket is closed, and any pending asynchronous socket
              * operations are canceled, but their completion handlers, which hold shared-pointer
              * references to this object, will be posted to the execution context and execute
-             * later. The on_disconnected signal will be raised later from the execution context,
-             * unless it has already been raised due to an error or a previous call to close().
-             *
-             * @todo Implement graceful closure using a WebSocket close frame and socket shutdown.
+             * later. The on_closed signal will be raised later from the execution context,
+             * unless it has already been raised due to an error or a previous call to stop().
              */
-            void close();
+            void stop();
 
             /**
-             * Asynchronously sends a JSON-RPC control request to the remote peer.
+             * Asynchronously sends signal data to the remote peer. This function directly
+             * supports scatter-gather operations with no additional copy steps.
              *
-             * @param method The method to invoke over JSON-RPC.
-             * @param params A JSON value containing the parameters to pass to the requested
-             *     method.
+             * @tparam ConstBufferSequence A type that satisfies the Boost.Asio requirements for
+             *     a sequence of immutable buffers.
              *
-             * @throws XXX TODO @todo
+             * @param signo The signal number to which the data applies.
+             * @param data A sequence of Boost.Asio buffer descriptors for the data to send.
+             */
+            template <typename ConstBufferSequence>
+            void send_data(
+                unsigned signo,
+                ConstBufferSequence&& data)
+            {
+                send_packet(
+                    signo,
+                    streaming_protocol::packet_type::DATA,
+                    std::forward(data));
+            }
+
+            /**
+             * Asynchronously sends JSON-RPC metadata to the remote peer.
+             *
+             * @param signo The signal number to which the metadata applies, or zero for global
+             *     metadata.
+             * @param method The metadata method name.
+             * @param params A JSON value containing the metadata parameters.
              */
             void send_metadata(
                 unsigned signo,
                 const std::string& method,
                 const nlohmann::json& params);
-
-            template <typename ConstBufferSequence>
-            void send_data(
-                unsigned signo,
-                const ConstBufferSequence& data)
-            {
-                send_packet(
-                    signo,
-                    streaming_protocol::packet_type::DATA,
-                    data);
-            }
 
             /**
              * A signal raised when a WebSocket Streaming Protocol data packet is received. The
@@ -121,7 +147,9 @@ namespace wss
              * @param data A pointer to the payload data.
              * @param size The number of payload data bytes pointed to by @p data.
              *
-             * @throws Any exception thrown by a connected slot is silently ignored.
+             * @throws ... Connected slots should not throw exceptions. If they do, they will
+             *     propagate out to the execution context. This can result in an unhandled
+             *     exception on a thread and terminate the process.
              */
             boost::signals2::signal<
                 void(
@@ -134,11 +162,14 @@ namespace wss
              * A signal raised when a WebSocket Streaming Protocol metadata packet is received.
              * The signal is raised from the execution context of the socket.
              *
-             * @param signo The signal number to which the metadata applies.
-             * @param method A reference to the metadata method name.
-             * @param params A reference to a JSON value containing the metadata parameters.
+             * @param signo The signal number to which the metadata applies, or zero for global
+             *     metadata.
+             * @param method The metadata method name.
+             * @param params A JSON value containing the metadata parameters.
              *
-             * @throws Any exception thrown by a connected slot is silently ignored.
+             * @throws ... Connected slots should not throw exceptions. If they do, they will
+             *     propagate out to the execution context. This can result in an unhandled
+             *     exception on a thread and terminate the process.
              */
             boost::signals2::signal<
                 void(
@@ -149,21 +180,27 @@ namespace wss
 
             /**
              * A signal raised when the connection is closed. This can occur due to an error, or
-             * when close() is called. The signal is raised from the execution context of the
-             * socket.
+             * when stop() is called. The signal is raised from the execution context of the
+             * socket. Note that this may occur even after a caller has released its
+             * std::shared_ptr reference to a peer object.
              *
              * @param ec The error code of the error, if any, that caused the connection to be
              *     closed.
+             *
+             * @throws ... Connected slots should not throw exceptions. If they do, they will
+             *     propagate out to the execution context. This can result in an unhandled
+             *     exception on a thread and terminate the process.
              */
             boost::signals2::signal<
                 void(const boost::system::error_code& ec)
-            > on_disconnected;
+            > on_closed;
 
         private:
 
+            void set_send_buffer_size(std::size_t size);
+
             void do_wait_rx();
             void do_wait_tx();
-            void do_shutdown();
 
             void finish_wait_rx(const boost::system::error_code& wait_ec);
             void finish_wait_tx(const boost::system::error_code& wait_ec);
@@ -204,14 +241,11 @@ namespace wss
                 std::size_t size,
                 bool do_shutdown_after);
 
-            void close(const boost::system::error_code& ec);
+            void close(const boost::system::error_code& ec = {});
+
+        private:
 
             boost::asio::ip::tcp::socket socket;
-            bool is_client;
-
-            std::random_device random_device;
-            std::mt19937 random_generator;
-            std::uniform_int_distribution<std::uint32_t> random_ints;
 
             std::vector<std::uint8_t> rx_buffer;
             std::vector<std::uint8_t> tx_buffer;

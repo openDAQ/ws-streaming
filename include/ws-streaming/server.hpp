@@ -8,9 +8,9 @@
 
 #include <nlohmann/json.hpp>
 
+#include <ws-streaming/http_client_servicer.hpp>
 #include <ws-streaming/listener.hpp>
 #include <ws-streaming/peer.hpp>
-#include <ws-streaming/session.hpp>
 
 namespace wss
 {
@@ -32,44 +32,48 @@ namespace wss
         private:
 
             void add_listener(std::uint16_t port);
-            void add_listener(std::shared_ptr<listener> listener);
+            void add_listener(std::shared_ptr<listener<>> listener);
 
             void on_listener_accept(boost::asio::ip::tcp::socket& socket);
-            nlohmann::json on_control_request(const nlohmann::json& request);
-            void on_websocket_connection(boost::asio::ip::tcp::socket& socket);
+            nlohmann::json on_servicer_control_request(const std::shared_ptr<http_client_servicer>& servicer, const nlohmann::json& request);
+            void on_servicer_websocket_upgrade(const std::shared_ptr<http_client_servicer>& servicer, boost::asio::ip::tcp::socket& socket);
+            void on_servicer_closed(const std::shared_ptr<http_client_servicer>& servicer, const boost::system::error_code& ec);
             void on_peer_data_received(const std::shared_ptr<peer>& peer, unsigned signo, const std::uint8_t *data, std::size_t size);
             void on_peer_metadata_received(const std::shared_ptr<peer>& peer, unsigned signo, const std::string& method, const nlohmann::json& params);
-            void on_peer_disconnected(const std::shared_ptr<peer>& peer, const boost::system::error_code& ec);
+            void on_peer_closed(const std::shared_ptr<peer>& peer, const boost::system::error_code& ec);
 
             struct listener_entry
             {
                 listener_entry(
-                        std::shared_ptr<listener> l,
+                        std::shared_ptr<listener<>> l,
                         boost::signals2::scoped_connection connection)
                     : l(l)
                     , connection(std::move(connection))
                 {
                 }
 
-                std::shared_ptr<listener> l;
+                std::shared_ptr<listener<>> l;
                 boost::signals2::scoped_connection connection;
             };
 
             struct client_entry
             {
                 client_entry(
-                        std::shared_ptr<session> client,
-                        boost::signals2::scoped_connection on_websocket_connection,
-                        boost::signals2::scoped_connection on_control_request)
+                        std::shared_ptr<http_client_servicer> client,
+                        boost::signals2::scoped_connection on_websocket_upgrade,
+                        boost::signals2::scoped_connection on_control_request,
+                        boost::signals2::scoped_connection on_closed)
                     : client(client)
-                    , on_websocket_connection(std::move(on_websocket_connection))
+                    , on_websocket_upgrade(std::move(on_websocket_upgrade))
                     , on_control_request(std::move(on_control_request))
+                    , on_closed(std::move(on_closed))
                 {
                 }
 
-                std::shared_ptr<session> client;
-                boost::signals2::scoped_connection on_websocket_connection;
+                std::shared_ptr<http_client_servicer> client;
+                boost::signals2::scoped_connection on_websocket_upgrade;
                 boost::signals2::scoped_connection on_control_request;
+                boost::signals2::scoped_connection on_closed;
             };
 
             struct peer_entry
@@ -78,18 +82,18 @@ namespace wss
                         std::shared_ptr<wss::peer> peer,
                         boost::signals2::scoped_connection on_data_received,
                         boost::signals2::scoped_connection on_metadata_received,
-                        boost::signals2::scoped_connection on_disconnected)
+                        boost::signals2::scoped_connection on_closed)
                     : peer(peer)
                     , on_data_received(std::move(on_data_received))
                     , on_metadata_received(std::move(on_metadata_received))
-                    , on_disconnected(std::move(on_disconnected))
+                    , on_closed(std::move(on_closed))
                 {
                 }
 
                 std::shared_ptr<wss::peer> peer;
                 boost::signals2::scoped_connection on_data_received;
                 boost::signals2::scoped_connection on_metadata_received;
-                boost::signals2::scoped_connection on_disconnected;
+                boost::signals2::scoped_connection on_closed;
             };
 
             boost::asio::strand<boost::asio::any_io_executor> strand;

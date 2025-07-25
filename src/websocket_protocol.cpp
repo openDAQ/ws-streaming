@@ -1,7 +1,12 @@
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <string>
 
+#include <boost/uuid/detail/sha1.hpp>
+
+#include <ws-streaming/base64.hpp>
 #include <ws-streaming/websocket_protocol.hpp>
 
 wss::websocket_protocol::decoded_header
@@ -71,4 +76,27 @@ wss::websocket_protocol::decode_header(const std::uint8_t *data, std::size_t siz
         header.header_size = data - data_begin;
 
     return header;
+}
+
+
+std::string wss::websocket_protocol::get_response_key(const std::string& sec_websocket_key)
+{
+    boost::uuids::detail::sha1 sha1;
+
+    sha1.process_bytes(sec_websocket_key.data(), sec_websocket_key.length());
+    sha1.process_bytes(MAGIC_KEY, sizeof(MAGIC_KEY) - 1);
+
+    boost::uuids::detail::sha1::digest_type sha1_value;
+    sha1.get_digest(sha1_value);
+
+    std::array<char, 20> sha1_bytes;
+    for (unsigned i = 0; i < 5; ++i)
+    {
+        sha1_bytes[4 * i + 0] = sha1_value[i] >> 24;
+        sha1_bytes[4 * i + 1] = sha1_value[i] >> 16;
+        sha1_bytes[4 * i + 2] = sha1_value[i] >> 8;
+        sha1_bytes[4 * i + 3] = sha1_value[i];
+    }
+
+    return detail::base64(sha1_bytes);
 }
