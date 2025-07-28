@@ -5,7 +5,7 @@
 
 #include <boost/endian/conversion.hpp>
 
-namespace wss
+namespace wss::detail
 {
     /**
      * Contains constants and other definitions related to the WebSocket Streaming Protocol.

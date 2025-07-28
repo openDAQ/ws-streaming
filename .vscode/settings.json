@@ -85,6 +85,7 @@
         "typeinfo": "cpp",
         "valarray": "cpp",
         "variant": "cpp",
-        "*.xhpp": "cpp"
+        "*.xhpp": "cpp",
+        "hash_set": "cpp"
     }
 }

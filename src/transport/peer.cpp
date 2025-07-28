@@ -19,40 +19,67 @@
 
 #include <nlohmann/json.hpp>
 
-#include <ws-streaming/peer.hpp>
-#include <ws-streaming/streaming_protocol.hpp>
-#include <ws-streaming/websocket_protocol.hpp>
+#include <ws-streaming/detail/streaming_protocol.hpp>
+#include <ws-streaming/detail/websocket_protocol.hpp>
+#include <ws-streaming/transport/peer.hpp>
 
-wss::peer::peer(
+using namespace std::placeholders;
+
+wss::transport::peer::peer(
         boost::asio::ip::tcp::socket&& socket,
         bool is_client,
         std::size_t rx_buffer_size,
         std::size_t tx_buffer_size)
-    : socket{std::move(socket)}
-    , rx_buffer(rx_buffer_size)
-    , tx_buffer(tx_buffer_size)
+    : _socket{std::move(socket)}
+    , _rx_buffer(rx_buffer_size)
+    , _tx_buffer(tx_buffer_size)
 {
-    this->socket.non_blocking(true);
+    _socket.non_blocking(true);
     set_send_buffer_size(tx_buffer_size);
 }
 
-void wss::peer::run()
+void wss::transport::peer::run()
 {
     do_wait_rx();
 }
 
-void wss::peer::stop()
+void wss::transport::peer::run(const void *data, std::size_t size)
 {
-    boost::system::error_code ec;
-    socket.close(ec);
+    if (size > _rx_buffer.size())
+        boost::asio::post(
+            _socket.get_executor(),
+            [self = shared_from_this()]()
+            {
+                self->close(boost::asio::error::no_buffer_space);
+            });
+
+    std::memcpy(
+        _rx_buffer.data(),
+        data,
+        size);
+
+    _rx_buffer_bytes = size;
+
+    boost::asio::post(
+        _socket.get_executor(),
+        [self = shared_from_this()]()
+        {
+            self->process_buffer();
+        });
 }
 
-void wss::peer::send_metadata(
+void wss::transport::peer::stop()
+{
+    boost::system::error_code ec;
+    _socket.close(ec);
+}
+
+void wss::transport::peer::send_metadata(
     unsigned signo,
     const std::string& method,
     const nlohmann::json& params)
 {
-    std::uint32_t encoding = streaming_protocol::metadata_encoding::MSGPACK;
+    std::uint32_t encoding = detail::streaming_protocol::metadata_encoding::MSGPACK;
 
     auto payload = nlohmann::json::to_msgpack({
         {"method", method},
@@ -67,12 +94,12 @@ void wss::peer::send_metadata(
 
     send_packet(
         signo,
-        streaming_protocol::packet_type::METADATA,
+        detail::streaming_protocol::packet_type::METADATA,
         buffers,
         sizeof(encoding) + payload.size());
 }
 
-void wss::peer::set_send_buffer_size(std::size_t size)
+void wss::transport::peer::set_send_buffer_size(std::size_t size)
 {
     // Clamp the requested tx buffer size to the largest value we can store in an int.
     if (size > std::numeric_limits<int>::max())
@@ -81,32 +108,32 @@ void wss::peer::set_send_buffer_size(std::size_t size)
     // Ask the operating system to hold as much as possible.
     boost::system::error_code ec;
     auto option = boost::asio::socket_base::send_buffer_size{static_cast<int>(size)};
-    socket.set_option(option, ec);
+    _socket.set_option(option, ec);
 }
 
-void wss::peer::do_wait_rx()
+void wss::transport::peer::do_wait_rx()
 {
-    socket.async_wait(
+    _socket.async_wait(
         boost::asio::socket_base::wait_read,
         std::bind(
             &peer::finish_wait_rx,
             shared_from_this(),
-            std::placeholders::_1));
+            _1));
 }
 
-void wss::peer::do_wait_tx()
+void wss::transport::peer::do_wait_tx()
 {
-    socket.async_wait(
+    _socket.async_wait(
         boost::asio::socket_base::wait_write,
         std::bind(
             &peer::finish_wait_tx,
             shared_from_this(),
-            std::placeholders::_1));
+            _1));
 
-    waiting_tx = true;
+    _waiting_tx = true;
 }
 
-void wss::peer::finish_wait_rx(const boost::system::error_code& wait_ec)
+void wss::transport::peer::finish_wait_rx(const boost::system::error_code& wait_ec)
 {
     boost::system::error_code receive_ec;
 
@@ -115,10 +142,10 @@ void wss::peer::finish_wait_rx(const boost::system::error_code& wait_ec)
         return close(wait_ec);
 
     // Since the socket is readable, read as much as we can from it.
-    std::size_t bytes_received = socket.receive(
+    std::size_t bytes_received = _socket.receive(
         boost::asio::buffer(
-            rx_buffer.data() + rx_buffer_bytes,
-            rx_buffer.size() - rx_buffer_bytes),
+            _rx_buffer.data() + _rx_buffer_bytes,
+            _rx_buffer.size() - _rx_buffer_bytes),
         0,
         receive_ec);
 
@@ -129,57 +156,23 @@ void wss::peer::finish_wait_rx(const boost::system::error_code& wait_ec)
     if (receive_ec && receive_ec != boost::asio::error::would_block)
         return close(receive_ec);
 
-    rx_buffer_bytes += bytes_received;
+    _rx_buffer_bytes += bytes_received;
 
-    // Process as many WebSocket frames as possible.
-    while (true)
-    {
-        // Try to decode the WebSocket header.
-        auto header = websocket_protocol::decode_header(rx_buffer.data(), rx_buffer_bytes);
-
-        // If there's not enough data to form a complete frame, we can't process any more.
-        if (!header.header_size)
-            break;
-
-        boost::system::error_code process_ec;
-        process_websocket_frame(
-            header,
-            rx_buffer.data() + header.header_size,
-            header.payload_size,
-            process_ec);
-
-        if (process_ec)
-            return close(process_ec);
-
-        // Consume the handled frame by sliding the remaining data in the read buffer over
-        // to the left. (Can't use std::memcpy() for this because the ranges overlap.)
-        std::memmove(
-            &rx_buffer[0],
-            &rx_buffer[header.header_size + header.payload_size],
-            rx_buffer_bytes - header.header_size + header.payload_size);
-        rx_buffer_bytes -= header.header_size + header.payload_size;
-    }
-
-    // If the read buffer is still full after processing, it is an error condition
-    // (the client must be sending a frame larger than our fixed-size read buffer).
-    if (rx_buffer_bytes == rx_buffer.size())
-        return close(boost::asio::error::no_buffer_space);
-
-    do_wait_rx();
+    process_buffer();
 }
 
-void wss::peer::finish_wait_tx(const boost::system::error_code& wait_ec)
+void wss::transport::peer::finish_wait_tx(const boost::system::error_code& wait_ec)
 {
     boost::system::error_code send_ec;
-    waiting_tx = false;
+    _waiting_tx = false;
 
     // Was there an error waiting for the socket to become writeable?
     if (wait_ec)
         return close(wait_ec);
 
     // Since the socket is writeable, write as much as we can to it.
-    std::size_t bytes_sent = socket.send(
-        boost::asio::buffer(tx_buffer.data(), tx_buffer_bytes),
+    std::size_t bytes_sent = _socket.send(
+        boost::asio::buffer(_tx_buffer.data(), _tx_buffer_bytes),
         0,
         send_ec);
 
@@ -190,29 +183,70 @@ void wss::peer::finish_wait_tx(const boost::system::error_code& wait_ec)
     // If we sent all the data in our buffer, we can stop now.
     if (bytes_sent)
         std::memmove(
-            tx_buffer.data(),
-            &tx_buffer[bytes_sent],
-            tx_buffer_bytes - bytes_sent);
-    tx_buffer_bytes -= bytes_sent;
+            _tx_buffer.data(),
+            &_tx_buffer[bytes_sent],
+            _tx_buffer_bytes - bytes_sent);
+    _tx_buffer_bytes -= bytes_sent;
 
-    if (shutdown_after)
+    if (_shutdown_after)
     {
-        shutdown_after -= std::min(bytes_sent, shutdown_after);
-        if (shutdown_after == 0)
+        _shutdown_after -= std::min(bytes_sent, _shutdown_after);
+        if (_shutdown_after == 0)
             return close();
     }
 
-    if (bytes_sent < tx_buffer_bytes)
+    if (bytes_sent < _tx_buffer_bytes)
         do_wait_tx();
 }
 
-void wss::peer::process_websocket_frame(
-    const websocket_protocol::decoded_header& header,
+void wss::transport::peer::process_buffer()
+{
+    // Process as many WebSocket frames as possible.
+    while (true)
+    {
+        // Try to decode the WebSocket header.
+        auto header = detail::websocket_protocol::decode_header(
+            _rx_buffer.data(),
+            _rx_buffer_bytes);
+
+        // If there's not enough data to form a complete frame, we can't process any more.
+        if (!header.header_size)
+            break;
+
+        boost::system::error_code process_ec;
+        process_websocket_frame(
+            header,
+            _rx_buffer.data() + header.header_size,
+            header.payload_size,
+            process_ec);
+
+        if (process_ec)
+            return close(process_ec);
+
+        // Consume the handled frame by sliding the remaining data in the read buffer over
+        // to the left. (Can't use std::memcpy() for this because the ranges overlap.)
+        std::memmove(
+            &_rx_buffer[0],
+            &_rx_buffer[header.header_size + header.payload_size],
+            _rx_buffer_bytes - header.header_size + header.payload_size);
+        _rx_buffer_bytes -= header.header_size + header.payload_size;
+    }
+
+    // If the read buffer is still full after processing, it is an error condition
+    // (the client must be sending a frame larger than our fixed-size read buffer).
+    if (_rx_buffer_bytes == _rx_buffer.size())
+        return close(boost::asio::error::no_buffer_space);
+
+    do_wait_rx();
+}
+
+void wss::transport::peer::process_websocket_frame(
+    const detail::websocket_protocol::decoded_header& header,
     std::uint8_t *data,
     std::size_t size,
     boost::system::error_code& ec)
 {
-    if (!(header.flags & websocket_protocol::flags::FIN))
+    if (!(header.flags & detail::websocket_protocol::flags::FIN))
     {
         ec = boost::asio::error::operation_not_supported;
         return;
@@ -226,29 +260,29 @@ void wss::peer::process_websocket_frame(
     switch (header.opcode)
     {
         // React to close frames by sending our own close frame and then signaling the caller to disconnect.
-        case websocket_protocol::opcodes::CLOSE:
+        case detail::websocket_protocol::opcodes::CLOSE:
         {
             send_websocket_frame(
-                websocket_protocol::opcodes::CLOSE,
+                detail::websocket_protocol::opcodes::CLOSE,
                 boost::asio::const_buffer(),
                 0,
                 true);
             break;
         }
 
-        case websocket_protocol::opcodes::PING:
+        case detail::websocket_protocol::opcodes::PING:
         {
             send_websocket_frame(
-                websocket_protocol::opcodes::PONG,
+                detail::websocket_protocol::opcodes::PONG,
                 boost::asio::const_buffer(data, size),
                 size);
             break;
         }
 
-        case websocket_protocol::opcodes::TEXT:
+        case detail::websocket_protocol::opcodes::TEXT:
             break;
 
-        case websocket_protocol::opcodes::BINARY:
+        case detail::websocket_protocol::opcodes::BINARY:
         {
             process_packet(data, size);
             break;
@@ -260,23 +294,25 @@ void wss::peer::process_websocket_frame(
     }
 }
 
-void wss::peer::process_packet(const std::uint8_t *data, std::size_t size)
+void wss::transport::peer::process_packet(
+    const std::uint8_t *data,
+    std::size_t size)
 {
     // Try to decode the WebSocket Streaming Protocol packet.
-    auto header = streaming_protocol::decode_header(data, size);
+    auto header = detail::streaming_protocol::decode_header(data, size);
     if (!header.header_size)
         return;
 
     switch (header.type)
     {
-        case streaming_protocol::packet_type::DATA:
+        case detail::streaming_protocol::packet_type::DATA:
             process_data_packet(
                 header.signo,
                 data + header.header_size,
                 header.payload_size);
             break;
 
-        case streaming_protocol::packet_type::METADATA:
+        case detail::streaming_protocol::packet_type::METADATA:
             process_metadata_packet(
                 header.signo,
                 data + header.header_size,
@@ -288,12 +324,18 @@ void wss::peer::process_packet(const std::uint8_t *data, std::size_t size)
     }
 }
 
-void wss::peer::process_data_packet(unsigned signo, const std::uint8_t *data, std::size_t size)
+void wss::transport::peer::process_data_packet(
+    unsigned signo,
+    const std::uint8_t *data,
+    std::size_t size)
 {
     on_data_received(signo, data, size);
 }
 
-void wss::peer::process_metadata_packet(unsigned signo, const std::uint8_t *data, std::size_t size)
+void wss::transport::peer::process_metadata_packet(
+    unsigned signo,
+    const std::uint8_t *data,
+    std::size_t size)
 {
     if (size < sizeof(std::uint32_t))
         return;
@@ -303,7 +345,7 @@ void wss::peer::process_metadata_packet(unsigned signo, const std::uint8_t *data
     nlohmann::json metadata;
     switch (encoding)
     {
-        case streaming_protocol::metadata_encoding::MSGPACK:
+        case detail::streaming_protocol::metadata_encoding::MSGPACK:
             try
             {
                 metadata = nlohmann::json::from_msgpack(
@@ -329,27 +371,27 @@ void wss::peer::process_metadata_packet(unsigned signo, const std::uint8_t *data
 }
 
 template <typename ConstBufferSequence>
-void wss::peer::send_packet(
+void wss::transport::peer::send_packet(
     unsigned signo,
     unsigned type,
     const ConstBufferSequence& payload,
     const std::optional<std::size_t>& payload_size)
 {
-    std::array<std::uint8_t, streaming_protocol::MAX_HEADER_SIZE> streaming_header;
+    std::array<std::uint8_t, detail::streaming_protocol::MAX_HEADER_SIZE> streaming_header;
 
     std::size_t calculated_payload_size
         = payload_size.has_value()
             ? payload_size.value()
             : boost::asio::buffer_size(payload);
 
-    auto streaming_header_size = streaming_protocol::generate_header(
+    auto streaming_header_size = detail::streaming_protocol::generate_header(
         streaming_header.data(),
         signo,
         type,
         calculated_payload_size);
 
     send_websocket_frame(
-        websocket_protocol::opcodes::BINARY,
+        detail::websocket_protocol::opcodes::BINARY,
         boost::beast::buffers_cat(
             boost::asio::buffer(
                 streaming_header.data(),
@@ -359,23 +401,23 @@ void wss::peer::send_packet(
 }
 
 template <typename ConstBufferSequence>
-void wss::peer::send_websocket_frame(
+void wss::transport::peer::send_websocket_frame(
     unsigned opcode,
     const ConstBufferSequence& payload,
     const std::optional<std::size_t>& payload_size,
     bool do_shutdown_after)
 {
-    std::array<std::uint8_t, websocket_protocol::MAX_HEADER_SIZE> ws_header;
+    std::array<std::uint8_t, detail::websocket_protocol::MAX_HEADER_SIZE> ws_header;
 
     std::size_t calculated_payload_size
         = payload_size.has_value()
             ? payload_size.value()
             : boost::asio::buffer_size(payload);
 
-    auto ws_header_size = websocket_protocol::generate_header(
+    auto ws_header_size = detail::websocket_protocol::generate_header(
         ws_header.data(),
         opcode,
-        websocket_protocol::flags::FIN,
+        detail::websocket_protocol::flags::FIN,
         calculated_payload_size);
 
     write(
@@ -389,7 +431,7 @@ void wss::peer::send_websocket_frame(
 }
 
 template <typename ConstBufferSequence>
-void wss::peer::write(
+void wss::transport::peer::write(
     const ConstBufferSequence& buffers,
     const std::optional<std::size_t>& size,
     bool do_shutdown_after)
@@ -403,12 +445,12 @@ void wss::peer::write(
     // become writeable, we just need to add the additional data to the user-space
     // buffer; the wait completion handler will see the additional data along with
     // whatever was previously buffered.
-    if (waiting_tx)
+    if (_waiting_tx)
         return enqueue(buffers, calculated_size, do_shutdown_after);
 
     // Otherwise, send as much as we can synchronously.
     boost::system::error_code send_ec;
-    std::size_t bytes_sent = socket.send(buffers, 0, send_ec);
+    std::size_t bytes_sent = _socket.send(buffers, 0, send_ec);
 
     // Did a genuine error occur?
     if (send_ec && send_ec != boost::asio::error::would_block)
@@ -431,37 +473,40 @@ void wss::peer::write(
 }
 
 template <typename ConstBufferSequence>
-void wss::peer::enqueue(
+void wss::transport::peer::enqueue(
     const ConstBufferSequence& buffers,
     std::size_t size,
     bool do_shutdown_after)
 {
     std::size_t bytes_buffered = boost::asio::buffer_copy(
         boost::asio::mutable_buffer(
-            tx_buffer.data() + tx_buffer_bytes,
-            tx_buffer.size() - tx_buffer_bytes),
+            _tx_buffer.data() + _tx_buffer_bytes,
+            _tx_buffer.size() - _tx_buffer_bytes),
         buffers);
 
-    tx_buffer_bytes += bytes_buffered;
+    _tx_buffer_bytes += bytes_buffered;
 
-    if (tx_buffer_bytes == tx_buffer.size())
+    if (_tx_buffer_bytes == _tx_buffer.size())
         return close(boost::asio::error::no_buffer_space);
 
     if (do_shutdown_after)
-        shutdown_after = tx_buffer_bytes;
+        _shutdown_after = _tx_buffer_bytes;
 
-    if (!waiting_tx)
+    if (!_waiting_tx)
         do_wait_tx();
 }
 
-void wss::peer::close(const boost::system::error_code& ec)
+void wss::transport::peer::close(
+    const boost::system::error_code& ec)
 {
-    if (!socket.is_open())
+    if (_is_closed)
         return;
 
+    _is_closed = true;
+
     boost::system::error_code close_ec;
-    socket.shutdown(socket.shutdown_both, close_ec);
-    socket.close(close_ec);
+    _socket.shutdown(_socket.shutdown_both, close_ec);
+    _socket.close(close_ec);
 
     on_closed(ec);
 }

@@ -19,21 +19,24 @@
 #include <boost/optional/optional.hpp>
 #include <boost/system/error_code.hpp>
 
-#include <ws-streaming/http_client_servicer.hpp>
-#include <ws-streaming/websocket_protocol.hpp>
+#include <ws-streaming/detail/websocket_protocol.hpp>
+#include <ws-streaming/transport/http_client_servicer.hpp>
 
-wss::http_client_servicer::http_client_servicer(
+using namespace std::chrono_literals;
+using namespace std::placeholders;
+
+wss::transport::http_client_servicer::http_client_servicer(
         boost::asio::ip::tcp::socket&& socket)
     : stream(std::move(socket))
 {
 }
 
-void wss::http_client_servicer::run()
+void wss::transport::http_client_servicer::run()
 {
     do_read();
 }
 
-void wss::http_client_servicer::stop()
+void wss::transport::http_client_servicer::stop()
 {
     boost::asio::post(
         stream.get_executor(),
@@ -43,9 +46,9 @@ void wss::http_client_servicer::stop()
         });
 }
 
-void wss::http_client_servicer::do_read()
+void wss::transport::http_client_servicer::do_read()
 {
-    stream.expires_after(std::chrono::seconds(30));
+    stream.expires_after(30s);
 
     boost::beast::http::async_read(
         stream,
@@ -54,11 +57,11 @@ void wss::http_client_servicer::do_read()
         std::bind(
             &http_client_servicer::finish_read,
             shared_from_this(),
-            std::placeholders::_1,
-            std::placeholders::_2));
+            _1,
+            _2));
 }
 
-void wss::http_client_servicer::do_write(
+void wss::transport::http_client_servicer::do_write(
     boost::beast::http::message_generator&& msg,
     response_actions action)
 {
@@ -69,11 +72,11 @@ void wss::http_client_servicer::do_write(
             &http_client_servicer::finish_write,
             shared_from_this(),
             action,
-            std::placeholders::_1,
-            std::placeholders::_2));
+            _1,
+            _2));
 }
 
-void wss::http_client_servicer::finish_read(
+void wss::transport::http_client_servicer::finish_read(
     const boost::system::error_code& ec,
     std::size_t bytes_transferred)
 {
@@ -97,7 +100,7 @@ void wss::http_client_servicer::finish_read(
 
     if (get_header(boost::beast::http::field::upgrade) == "websocket" && !key.empty())
     {
-        auto response_key = websocket_protocol::get_response_key(key);
+        auto response_key = detail::websocket_protocol::get_response_key(key);
 
         boost::beast::http::response<boost::beast::http::string_body> res(
             boost::beast::http::status::switching_protocols,
@@ -189,7 +192,7 @@ void wss::http_client_servicer::finish_read(
     }
 }
 
-void wss::http_client_servicer::finish_write(
+void wss::transport::http_client_servicer::finish_write(
     response_actions action,
     const boost::beast::error_code& ec,
     std::size_t bytes_transferred)
@@ -213,7 +216,7 @@ void wss::http_client_servicer::finish_write(
     }
 }
 
-void wss::http_client_servicer::do_response(
+void wss::transport::http_client_servicer::do_response(
     const boost::beast::http::request<boost::beast::http::string_body>& req,
     boost::beast::http::status status,
     const nlohmann::json& response_json)
@@ -234,7 +237,7 @@ void wss::http_client_servicer::do_response(
 }
 
 template <typename Body>
-void wss::http_client_servicer::do_response(
+void wss::transport::http_client_servicer::do_response(
     boost::beast::http::response<Body>& response)
 {
     response.set(
@@ -255,7 +258,7 @@ void wss::http_client_servicer::do_response(
                 : response_actions::close);
 }
 
-void wss::http_client_servicer::close(
+void wss::transport::http_client_servicer::close(
     const boost::system::error_code& ec)
 {
     if (ec == boost::beast::error::timeout)

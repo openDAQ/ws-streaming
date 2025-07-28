@@ -1,10 +1,10 @@
 #include <cstddef>
 #include <cstdint>
 
-#include <ws-streaming/streaming_protocol.hpp>
+#include <ws-streaming/detail/streaming_protocol.hpp>
 
-wss::streaming_protocol::decoded_header
-wss::streaming_protocol::decode_header(const std::uint8_t *data, std::size_t size) noexcept
+wss::detail::streaming_protocol::decoded_header
+wss::detail::streaming_protocol::decode_header(const std::uint8_t *data, std::size_t size) noexcept
 {
     decoded_header header { };
     const std::uint8_t *data_begin = data;

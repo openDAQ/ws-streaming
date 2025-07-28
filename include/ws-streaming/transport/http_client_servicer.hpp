@@ -15,7 +15,7 @@
 
 #include <nlohmann/json.hpp>
 
-namespace wss
+namespace wss::transport
 {
     /**
      * Implements an asynchronous HTTP server which accepts WebSocket Streaming Protocol control

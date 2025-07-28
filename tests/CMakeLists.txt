@@ -1,15 +1,20 @@
-file(GLOB_RECURSE sources *.cpp)
-file(GLOB_RECURSE headers *.hpp)
+file(GLOB sources *.cpp)
 
-add_executable(wss-test ${sources} ${headers})
+foreach(source ${sources})
 
-set_target_properties(${PROJECT_NAME} PROPERTIES
-    CXX_STANDARD            17
-    CXX_STANDARD_REQUIRED   ON
-    CXX_EXTENSIONS          OFF
-)
+    get_filename_component(name ${source} NAME_WE)
 
-target_link_libraries(wss-test
-    PUBLIC
-        ws-streaming::ws-streaming
-)
+    add_executable(${name} ${source})
+
+    set_target_properties(${name} PROPERTIES
+        CXX_STANDARD            17
+        CXX_STANDARD_REQUIRED   ON
+        CXX_EXTENSIONS          ON)
+
+    target_link_libraries(${name} PUBLIC
+        GTest::gtest_main
+        ws-streaming::ws-streaming)
+
+    add_test(NAME ${name} COMMAND ${name})
+
+endforeach()

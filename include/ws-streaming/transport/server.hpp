@@ -8,11 +8,11 @@
 
 #include <nlohmann/json.hpp>
 
-#include <ws-streaming/http_client_servicer.hpp>
-#include <ws-streaming/listener.hpp>
-#include <ws-streaming/peer.hpp>
+#include <ws-streaming/transport/http_client_servicer.hpp>
+#include <ws-streaming/transport/listener.hpp>
+#include <ws-streaming/transport/peer.hpp>
 
-namespace wss
+namespace wss::transport
 {
     class server
     {
@@ -76,10 +76,10 @@ namespace wss
                 boost::signals2::scoped_connection on_closed;
             };
 
-            struct peer_entry
+            struct connected_client
             {
-                peer_entry(
-                        std::shared_ptr<wss::peer> peer,
+                connected_client(
+                        std::shared_ptr<transport::peer> peer,
                         boost::signals2::scoped_connection on_data_received,
                         boost::signals2::scoped_connection on_metadata_received,
                         boost::signals2::scoped_connection on_closed)
@@ -90,7 +90,7 @@ namespace wss
                 {
                 }
 
-                std::shared_ptr<wss::peer> peer;
+                std::shared_ptr<transport::peer> peer;
                 boost::signals2::scoped_connection on_data_received;
                 boost::signals2::scoped_connection on_metadata_received;
                 boost::signals2::scoped_connection on_closed;
@@ -99,6 +99,6 @@ namespace wss
             boost::asio::strand<boost::asio::any_io_executor> strand;
             std::list<listener_entry> listeners;
             std::list<client_entry> sessions;
-            std::list<peer_entry> peers;
+            std::list<connected_client> clients;
     };
 }

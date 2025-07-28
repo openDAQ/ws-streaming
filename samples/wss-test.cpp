@@ -7,14 +7,14 @@
 
 #include <boost/asio.hpp>
 
-#include <ws-streaming/server.hpp>
+#include <ws-streaming/transport/server.hpp>
 
 static std::function<void()> do_exit;
 
 int main(int argc, char *argv[])
 {
     boost::asio::io_context ioc(1);
-    wss::server server(ioc.get_executor());
+    wss::transport::server server(ioc.get_executor());
     server.run();
 
     boost::asio::deadline_timer t(ioc);

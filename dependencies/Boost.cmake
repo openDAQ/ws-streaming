@@ -1,4 +1,4 @@
-find_package(Boost 1.82 QUIET GLOBAL)
+find_package(Boost 1.82 QUIET GLOBAL COMPONENTS url)
 
 if(Boost_FOUND)
 

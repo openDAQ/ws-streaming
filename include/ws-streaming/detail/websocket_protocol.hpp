@@ -6,7 +6,7 @@
 #include <optional>
 #include <string>
 
-namespace wss
+namespace wss::detail
 {
     /**
      * Contains constants and other definitions related to the WebSocket protocol.

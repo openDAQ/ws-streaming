@@ -6,11 +6,11 @@
 
 #include <boost/uuid/detail/sha1.hpp>
 
-#include <ws-streaming/base64.hpp>
-#include <ws-streaming/websocket_protocol.hpp>
+#include <ws-streaming/detail/base64.hpp>
+#include <ws-streaming/detail/websocket_protocol.hpp>
 
-wss::websocket_protocol::decoded_header
-wss::websocket_protocol::decode_header(const std::uint8_t *data, std::size_t size) noexcept
+wss::detail::websocket_protocol::decoded_header
+wss::detail::websocket_protocol::decode_header(const std::uint8_t *data, std::size_t size) noexcept
 {
     decoded_header header { };
     const std::uint8_t *data_begin = data;
@@ -79,7 +79,8 @@ wss::websocket_protocol::decode_header(const std::uint8_t *data, std::size_t siz
 }
 
 
-std::string wss::websocket_protocol::get_response_key(const std::string& sec_websocket_key)
+std::string wss::detail::websocket_protocol::get_response_key(
+    const std::string& sec_websocket_key)
 {
     boost::uuids::detail::sha1 sha1;
 

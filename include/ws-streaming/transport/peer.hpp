@@ -14,10 +14,10 @@
 
 #include <nlohmann/json.hpp>
 
-#include <ws-streaming/streaming_protocol.hpp>
-#include <ws-streaming/websocket_protocol.hpp>
+#include <ws-streaming/detail/streaming_protocol.hpp>
+#include <ws-streaming/detail/websocket_protocol.hpp>
 
-namespace wss
+namespace wss::transport
 {
     /**
      * Implements the transport layer of a WebSocket Streaming Protocol connection to a remote
@@ -97,6 +97,22 @@ namespace wss
             void run();
 
             /**
+             * Activates the peer by starting asynchronous I/O operations using the socket's
+             * execution context. The specified data is processed as if it had been received from
+             * the socket. This is useful, for example, if an HTTP client has inadvertently read
+             * and buffered WebSocket data after the HTTP request response. To stop the peer
+             * later, call stop(), which cancels all asynchronous I/O operations, allowing the
+             * object to be destroyed.
+             *
+             * Even if this function is called from within the correct execution context, the
+             * processing of the specified data is deferred using boost::asio::post().
+             *
+             * @param data A pointer to the data to process.
+             * @param size The number of bytes pointed to by @p data.
+             */
+            void run(const void *data, std::size_t size);
+
+            /**
              * Closes the connection. The socket is closed, and any pending asynchronous socket
              * operations are canceled, but their completion handlers, which hold shared-pointer
              * references to this object, will be posted to the execution context and execute
@@ -122,7 +138,7 @@ namespace wss
             {
                 send_packet(
                     signo,
-                    streaming_protocol::packet_type::DATA,
+                    detail::streaming_protocol::packet_type::DATA,
                     std::forward(data));
             }
 
@@ -195,6 +211,16 @@ namespace wss
                 void(const boost::system::error_code& ec)
             > on_closed;
 
+            /**
+             * Gets the underlying socket.
+             *
+             * @return The underlying socket.
+             */
+            boost::asio::ip::tcp::socket& socket()
+            {
+                return _socket;
+            }
+
         private:
 
             void set_send_buffer_size(std::size_t size);
@@ -205,8 +231,10 @@ namespace wss
             void finish_wait_rx(const boost::system::error_code& wait_ec);
             void finish_wait_tx(const boost::system::error_code& wait_ec);
 
+            void process_buffer();
+
             void process_websocket_frame(
-                const websocket_protocol::decoded_header& header,
+                const detail::websocket_protocol::decoded_header& header,
                 std::uint8_t *data,
                 std::size_t size,
                 boost::system::error_code& ec);
@@ -245,17 +273,18 @@ namespace wss
 
         private:
 
-            boost::asio::ip::tcp::socket socket;
+            boost::asio::ip::tcp::socket _socket;
+            bool _is_closed = false;
 
-            std::vector<std::uint8_t> rx_buffer;
-            std::vector<std::uint8_t> tx_buffer;
+            std::vector<std::uint8_t> _rx_buffer;
+            std::vector<std::uint8_t> _tx_buffer;
 
-            std::size_t rx_buffer_bytes = 0;
-            std::size_t tx_buffer_bytes = 0;
+            std::size_t _rx_buffer_bytes = 0;
+            std::size_t _tx_buffer_bytes = 0;
 
-            bool waiting_tx = false;
-            std::size_t shutdown_after = 0;
+            bool _waiting_tx = false;
+            std::size_t _shutdown_after = 0;
 
-            boost::system::error_code close_ec;
+            boost::system::error_code _close_ec;
     };
 }

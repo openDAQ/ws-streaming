@@ -9,7 +9,7 @@
 #include <boost/signals2/signal.hpp>
 #include <boost/system/error_code.hpp>
 
-namespace wss
+namespace wss::transport
 {
     /**
      * Asynchronously listens for incoming socket connections, and notifies the caller by raising
@@ -92,12 +92,9 @@ namespace wss
 
             void do_accept()
             {
+                using namespace std::placeholders;
                 acceptor.async_accept(
-                    std::bind(
-                        &listener::finish_accept,
-                        this->shared_from_this(),
-                        std::placeholders::_1,
-                        std::placeholders::_2));
+                    std::bind(&listener::finish_accept, this->shared_from_this(), _1, _2));
             }
 
             void finish_accept(
