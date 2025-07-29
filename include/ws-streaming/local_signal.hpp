@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <string>
 
 #include <boost/signals2/signal.hpp>
@@ -20,6 +21,7 @@ namespace wss
             void set_metadata(const nlohmann::json& metadata)
             {
                 _metadata = metadata;
+                on_metadata_changed(_metadata);
             }
 
             const std::string& id() const noexcept
@@ -35,6 +37,10 @@ namespace wss
             boost::signals2::signal<
                 void(const nlohmann::json& metadata)
             > on_metadata_changed;
+
+            boost::signals2::signal<
+                void(const void *data, std::size_t size)
+            > on_data;
 
         private:
 

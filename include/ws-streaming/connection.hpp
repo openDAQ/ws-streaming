@@ -22,7 +22,7 @@
 
 namespace wss
 {
-    class connection : std::enable_shared_from_this<connection>
+    class connection : public std::enable_shared_from_this<connection>
     {
         public:
 
@@ -70,6 +70,15 @@ namespace wss
             void on_peer_closed(
                 const boost::system::error_code& ec);
 
+            void on_local_signal_metadata_changed(
+                unsigned signo,
+                const nlohmann::json& metadata);
+
+            void on_local_signal_data(
+                unsigned signo,
+                const void *data,
+                std::size_t size);
+
             void on_signal_subscribe_requested(const std::string& signal_id);
             void on_signal_unsubscribe_requested(const std::string& signal_id);
 
@@ -84,7 +93,12 @@ namespace wss
             void handle_subscribe(unsigned signo, const nlohmann::json& params);
             void handle_unsubscribe(unsigned signo, const nlohmann::json& params);
             void handle_unavailable(const nlohmann::json& params);
+            void handle_control_request(const nlohmann::json& params);
             void handle_control_response(const nlohmann::json& params);
+
+            nlohmann::json do_control(const std::string& method, const nlohmann::json& params);
+            nlohmann::json do_control_subscribe(const nlohmann::json& params);
+            nlohmann::json do_control_unsubscribe(const nlohmann::json& params);
 
         private:
 
@@ -100,21 +114,35 @@ namespace wss
                 boost::signals2::scoped_connection on_unsubscribe_requested;
             };
 
+            struct local_signal_entry
+            {
+                local_signal_entry(local_signal& signal)
+                    : signal(signal)
+                {
+                }
+
+                local_signal& signal;
+                bool is_subscribed = false;
+                boost::signals2::scoped_connection on_metadata_changed;
+                boost::signals2::scoped_connection on_data;
+            };
+
             std::string _hostname;
             bool _is_client;
             std::shared_ptr<transport::peer> _peer;
-            std::map<std::string, signal_entry> _signals_by_id;
-            std::map<unsigned, signal_entry *> _signals_by_signo;
+            std::map<std::string, signal_entry> _remote_signals_by_id;
+            std::map<unsigned, signal_entry *> _remote_signals_by_signo;
 
             detail::semver _api_version;
-            std::string _stream_id;
+            std::string _remote_stream_id;
+            std::string _local_stream_id;
             std::unique_ptr<detail::control_client> _control_client;
 
             boost::signals2::scoped_connection _on_peer_data_received;
             boost::signals2::scoped_connection _on_peer_metadata_received;
             boost::signals2::scoped_connection _on_peer_closed;
 
-            std::map<unsigned, local_signal *> _signals;
+            std::map<unsigned, local_signal_entry> _local_signals;
             unsigned _next_signo = 1;
     };
 }

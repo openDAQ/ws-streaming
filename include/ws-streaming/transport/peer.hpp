@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -8,7 +9,10 @@
 #include <utility>
 #include <vector>
 
+#include <boost/asio/buffer.hpp>
 #include <boost/asio/ip/tcp.hpp>
+#include <boost/beast/core/buffers_cat.hpp>
+#include <boost/beast/core/buffers_suffix.hpp>
 #include <boost/signals2/signal.hpp>
 #include <boost/system/error_code.hpp>
 
@@ -134,12 +138,13 @@ namespace wss::transport
             template <typename ConstBufferSequence>
             void send_data(
                 unsigned signo,
-                ConstBufferSequence&& data)
+                const ConstBufferSequence& data)
             {
                 send_packet(
                     signo,
                     detail::streaming_protocol::packet_type::DATA,
-                    std::forward(data));
+                    data,
+                    std::nullopt);
             }
 
             /**
@@ -248,26 +253,126 @@ namespace wss::transport
                 unsigned signo,
                 unsigned type,
                 const ConstBufferSequence& payload,
-                const std::optional<std::size_t>& payload_size);
+                const std::optional<std::size_t>& payload_size)
+            {
+                std::array<std::uint8_t, detail::streaming_protocol::MAX_HEADER_SIZE> streaming_header;
+
+                std::size_t calculated_payload_size
+                    = payload_size.has_value()
+                        ? payload_size.value()
+                        : boost::asio::buffer_size(payload);
+
+                auto streaming_header_size = detail::streaming_protocol::generate_header(
+                    streaming_header.data(),
+                    signo,
+                    type,
+                    calculated_payload_size);
+
+                send_websocket_frame(
+                    detail::websocket_protocol::opcodes::BINARY,
+                    boost::beast::buffers_cat(
+                        boost::asio::buffer(
+                            streaming_header.data(),
+                            streaming_header_size),
+                        payload),
+                    streaming_header_size + calculated_payload_size);
+            }
 
             template <typename ConstBufferSequence>
             void send_websocket_frame(
                 unsigned opcode,
                 const ConstBufferSequence& payload,
                 const std::optional<std::size_t>& payload_size,
-                bool do_shutdown_after = false);
+                bool do_shutdown_after = false)
+            {
+                std::array<std::uint8_t, detail::websocket_protocol::MAX_HEADER_SIZE> ws_header;
+
+                std::size_t calculated_payload_size
+                    = payload_size.has_value()
+                        ? payload_size.value()
+                        : boost::asio::buffer_size(payload);
+
+                auto ws_header_size = detail::websocket_protocol::generate_header(
+                    ws_header.data(),
+                    opcode,
+                    detail::websocket_protocol::flags::FIN,
+                    calculated_payload_size);
+
+                write(
+                    boost::beast::buffers_cat(
+                        boost::asio::buffer(
+                            ws_header.data(),
+                            ws_header_size),
+                        payload),
+                    ws_header_size + calculated_payload_size,
+                    do_shutdown_after);
+            }
 
             template <typename ConstBufferSequence>
             void write(
                 const ConstBufferSequence& buffers,
                 const std::optional<std::size_t>& size,
-                bool do_shutdown_after);
+                bool do_shutdown_after)
+            {
+                std::size_t calculated_size
+                    = size.has_value()
+                        ? size.value()
+                        : boost::asio::buffer_size(buffers);
+
+                // If we already have user-space buffered data and are waiting for the socket to
+                // become writeable, we just need to add the additional data to the user-space
+                // buffer; the wait completion handler will see the additional data along with
+                // whatever was previously buffered.
+                if (_waiting_tx)
+                    return enqueue(buffers, calculated_size, do_shutdown_after);
+
+                // Otherwise, send as much as we can synchronously.
+                boost::system::error_code send_ec;
+                std::size_t bytes_sent = _socket.send(buffers, 0, send_ec);
+
+                // Did a genuine error occur?
+                if (send_ec && send_ec != boost::asio::error::would_block)
+                    return close(send_ec);
+
+                // Did we synchronously send all the requested data?
+                if (bytes_sent == calculated_size)
+                {
+                    if (do_shutdown_after)
+                        return close();
+                    return;
+                }
+
+                // There is leftover data that could not be sent synchronously. Buffer up the
+                // remaining data and start an asynchronous wait for the socket to become
+                // writeable.
+                boost::beast::buffers_suffix suffix{buffers};
+                suffix.consume(bytes_sent);
+                return enqueue(suffix, calculated_size - bytes_sent, do_shutdown_after);
+            }
 
             template <typename ConstBufferSequence>
             void enqueue(
                 const ConstBufferSequence& buffers,
                 std::size_t size,
-                bool do_shutdown_after);
+                bool do_shutdown_after)
+            {
+                std::size_t bytes_buffered = boost::asio::buffer_copy(
+                    boost::asio::mutable_buffer(
+                        _tx_buffer.data() + _tx_buffer_bytes,
+                        _tx_buffer.size() - _tx_buffer_bytes),
+                    buffers);
+
+                _tx_buffer_bytes += bytes_buffered;
+
+                if (_tx_buffer_bytes == _tx_buffer.size())
+                    return close(boost::asio::error::no_buffer_space);
+
+                if (do_shutdown_after)
+                    _shutdown_after = _tx_buffer_bytes;
+
+                if (!_waiting_tx)
+                    do_wait_tx();
+            }
 
             void close(const boost::system::error_code& ec = {});
 

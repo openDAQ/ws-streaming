@@ -65,5 +65,5 @@ void wss::detail::in_band_control_client::handle_response(const nlohmann::json& 
     decltype(_requests)::mapped_type handler = std::move(it->second);
     _requests.erase(it);
 
-    handler({}, params.value("result", nullptr));
+    handler({}, params.value<nlohmann::json>("result", nullptr));
 }
