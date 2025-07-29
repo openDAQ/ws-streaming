@@ -48,7 +48,6 @@ void wss::connection::run(const void *data, std::size_t size)
 
 void wss::connection::stop()
 {
-    std::cout << "calling _peer->stop()" << std::endl;
     _peer->stop();
 }
 
@@ -165,18 +164,15 @@ void wss::connection::handle_api_version(const nlohmann::json& params)
 
 void wss::connection::handle_init(const nlohmann::json& params)
 {
-    std::cout << "a" << std::endl;
     if (!params.is_object())
         return;
 
     if (params.contains("streamId") && params["streamId"].is_string())
         _stream_id = params["streamId"];
 
-    std::cout << "b" << std::endl;
     if (params.contains("commandInterfaces")
         && params["commandInterfaces"].is_object())
     {
-        std::cout << "c" << std::endl;
         const auto& ci = params["commandInterfaces"];
         if (ci.contains("jsonrpc-http")
             && ci["jsonrpc-http"].is_object()
@@ -195,7 +191,6 @@ void wss::connection::handle_init(const nlohmann::json& params)
             else
                 port = std::strtoul(std::string(ci["jsonrpc-http"]["port"]).c_str(), nullptr, 10);
 
-            std::cout << "d" << std::endl;
             _command_interface = std::make_unique<detail::http_command_interface>(
                 _peer->socket().get_executor(),
                 _hostname,
@@ -203,7 +198,6 @@ void wss::connection::handle_init(const nlohmann::json& params)
                 ci["jsonrpc-http"]["httpMethod"],
                 ci["jsonrpc-http"]["httpPath"],
                 ci["jsonrpc-http"]["httpVersion"]);
-            std::cout << "e" << std::endl;
         }
     }
 

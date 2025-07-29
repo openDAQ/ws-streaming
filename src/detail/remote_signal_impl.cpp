@@ -73,4 +73,10 @@ void wss::detail::remote_signal_impl::detach()
     }
 
     on_unavailable();
+
+    on_subscribed.disconnect_all_slots();
+    on_unsubscribed.disconnect_all_slots();
+    on_metadata_changed.disconnect_all_slots();
+    on_data_received.disconnect_all_slots();
+    on_unavailable.disconnect_all_slots();
 }

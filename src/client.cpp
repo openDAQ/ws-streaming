@@ -1,149 +1,85 @@
 #include <chrono>
 #include <cstdint>
 #include <functional>
-#include <iostream>
 #include <string>
 #include <utility>
 
+#include <boost/asio/any_io_executor.hpp>
+#include <boost/beast/core/flat_buffer.hpp>
+#include <boost/beast/core/tcp_stream.hpp>
 #include <boost/beast/http/error.hpp>
 #include <boost/beast/http/field.hpp>
 #include <boost/beast/http/message.hpp>
-#include <boost/beast/http/read.hpp>
 #include <boost/beast/http/string_body.hpp>
 #include <boost/beast/http/verb.hpp>
-#include <boost/beast/http/write.hpp>
-#include <boost/beast/version.hpp>
 #include <boost/url.hpp>
 
 #include <ws-streaming/client.hpp>
+#include <ws-streaming/connection.hpp>
 #include <ws-streaming/detail/base64.hpp>
 
-using namespace std::chrono_literals;
-using namespace std::placeholders;
-
 wss::client::client(boost::asio::any_io_executor executor)
-    : _resolver{executor}
-    , _stream{executor}
+    : _http_client{std::make_shared<detail::http_client>(executor)}
 {
 }
 
-void wss::client::connect(const boost::urls::url_view& url)
+void wss::client::async_connect(
+    const boost::urls::url_view& url,
+    std::function<
+        void(
+            const boost::system::error_code& ec,
+            const std::shared_ptr<wss::connection>& connection)
+    > handler)
 {
-    std::uint16_t port = url.port_number();
+    std::string path = url.path();
+    if (path.empty())
+        path = "/";
 
-    if (!port)
-        port = 80;
-
-    _hostname = url.host_address();
-    prepare_request(url.path());
-
-    std::cout << "calling async_resolve()" << std::endl;
-    _resolver.async_resolve(
-        url.host_address(),
-        std::to_string(url.port_number()),
-        std::bind(
-            &client::finish_resolve,
-            shared_from_this(),
-            _1,
-            _2));
-}
-
-void wss::client::prepare_request(
-    const std::string& path)
-{
-    _request = boost::beast::http::request<boost::beast::http::string_body>{
+    boost::beast::http::request<boost::beast::http::string_body> request{
         boost::beast::http::verb::get,
         path,
         11};
 
-    _request.set(boost::beast::http::field::connection, "Upgrade");
-    _request.set(boost::beast::http::field::host, _hostname);
-    _request.set(boost::beast::http::field::sec_websocket_key, get_random_key());
-    _request.set(boost::beast::http::field::upgrade, "websocket");
-    _request.set(boost::beast::http::field::user_agent,
-        "ws-streaming/" WS_STREAMING_VERSION_MAJOR
-            "." WS_STREAMING_VERSION_MINOR
-            "." WS_STREAMING_VERSION_PATCH
-            " " BOOST_BEAST_VERSION_STRING);
+    request.set(boost::beast::http::field::connection, "Upgrade");
+    request.set(boost::beast::http::field::host, url.host_address());
+    request.set(boost::beast::http::field::sec_websocket_key, get_random_key());
+    request.set(boost::beast::http::field::upgrade, "websocket");
+
+    std::uint16_t port = url.port_number();
+    if (!port)
+        port = 80;
+
+    _http_client->async_request(
+        url.host_address(),
+        port,
+        std::move(request),
+        [handler = std::move(handler), hostname = url.host_address()](
+            const boost::system::error_code& ec,
+            const boost::beast::http::response<boost::beast::http::string_body>& response,
+            boost::beast::tcp_stream& stream,
+            const boost::beast::flat_buffer& buffer)
+        {
+            if (ec)
+                return handler(ec, {});
+
+            if (response.result() != boost::beast::http::status::switching_protocols)
+                return handler(boost::beast::http::error::bad_status, {});
+
+            auto socket = stream.release_socket();
+            auto connection = std::make_shared<wss::connection>(
+                hostname,
+                std::move(socket),
+                true);
+
+            auto data = buffer.data();
+            connection->run(data.data(), data.size());
+            handler({}, connection);
+        });
 }
 
-void wss::client::finish_resolve(
-    const boost::system::error_code& ec,
-    const boost::asio::ip::tcp::resolver::results_type& results)
+void wss::client::cancel()
 {
-    std::cout << "finish_resolve(" << ec << ", ...)" << std::endl;
-
-    if (ec)
-        return on_error(ec);
-
-    std::cout << "calling async_connect()" << std::endl;
-    _stream.async_connect(
-        results,
-        std::bind(
-            &client::finish_connect,
-            shared_from_this(),
-            _1));
-}
-
-void wss::client::finish_connect(
-    const boost::system::error_code& ec)
-{
-    std::cout << "finish_connect(" << ec << ")" << std::endl;
-
-    if (ec)
-        return on_error(ec);
-
-    std::cout << "calling async_write()" << std::endl;
-    _stream.expires_after(30s);
-
-    boost::beast::http::async_write(
-        _stream,
-        _request,
-        std::bind(
-            &client::finish_write,
-            shared_from_this(),
-            _1));
-}
-
-void wss::client::finish_write(
-    const boost::system::error_code& ec)
-{
-    std::cout << "finish_write(" << ec << ")" << std::endl;
-
-    if (ec)
-        return on_error(ec);
-
-    std::cout << "calling async_read()" << std::endl;
-    boost::beast::http::async_read(
-        _stream,
-        _buffer,
-        _response,
-        std::bind(
-            &client::finish_read,
-            shared_from_this(),
-            _1));
-}
-
-void wss::client::finish_read(
-    const boost::system::error_code& ec)
-{
-    std::cout << "finish_read(" << ec << ")" << std::endl;
-
-    if (ec)
-        return on_error(ec);
-
-    if (_response.result() != boost::beast::http::status::switching_protocols)
-        return on_error(boost::beast::http::error::bad_status);
-
-    auto socket = _stream.release_socket();
-    auto connection = std::make_shared<wss::connection>(
-        _hostname,
-        std::move(socket),
-        true);
-
-    auto data = _buffer.data();
-    connection->run(data.data(), data.size());
-    on_connected(connection);
+    _http_client->cancel();
 }
 
 std::string wss::client::get_random_key()

@@ -1,38 +1,39 @@
 #pragma once
 
-#include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 
 #include <boost/asio/any_io_executor.hpp>
-#include <boost/asio/ip/tcp.hpp>
-#include <boost/beast/core/flat_buffer.hpp>
-#include <boost/beast/core/tcp_stream.hpp>
-#include <boost/beast/http/empty_body.hpp>
-#include <boost/beast/http/message.hpp>
-#include <boost/beast/http/string_body.hpp>
-#include <boost/signals2/signal.hpp>
 #include <boost/system/error_code.hpp>
 #include <boost/url.hpp>
 
 #include <ws-streaming/connection.hpp>
+#include <ws-streaming/detail/http_client.hpp>
 
 namespace wss
 {
     /**
      * Asynchronously establishes a WebSocket Streaming connection by making an HTTP/WebSocket
-     * request to a remote server. The caller calls connect() with a WebSocket URL. When the
-     * WebSocket connection is established, the on_connected signal is raised with a constructed
-     * wss::connection object. If an error occurs, the on_error signal is raised.
+     * request to a remote server. The caller calls async_connect() with a WebSocket URL. When the
+     * WebSocket connection is established, or an error occurs, the completion handler passed to
+     * async_connect() is called with the corresponding error code and/or a constructed
+     * wss::connection object.
+     *
+     * A client object can perform multiple async_connect() calls, but only one connection attempt
+     * at a time may be in progress. Connection attempts can be canceled by calling cancel(); the
+     * completion handler will then be called with the error code
+     * boost::asio::error::operation_aborted.
+     *
+     * Client instances must always be owned by a std::shared_ptr.
      */
     class client : public std::enable_shared_from_this<client>
     {
         public:
 
             /**
-             * Constructs a client object. No asynchronous operations are started until connect()
-             * is called. Asynchronous socket operations will be dispatched using the specified
-             * execution context.
+             * Constructs a client object. Asynchronous socket operations will be dispatched using
+             * the specified execution context.
              *
              * @param executor An execution context to use for asynchronous I/O operations.
              */
@@ -40,61 +41,40 @@ namespace wss
 
             /**
              * Asynchronously connects to a remote server. An HTTP GET request is made to
-             * establish the WebSocket connection. This function returns immediately. Either the
-             * on_connected or on_error signals will be raised from the specified execution
-             * context.
+             * establish the WebSocket connection.
              *
              * @param url The WebSocket URL of the remote server.
+             * @param handler A completion handler to call when the operation is complete. This
+             *     handler receives either a nonzero error code, or a std::shared_ptr holding a
+             *     constructed wss::connection object. The handler is guaranteed to be called
+             *     exactly once, and to be dispatched using the execution context passed to the
+             *     constructor.
              */
-            void connect(const boost::urls::url_view& url);
+            void async_connect(
+                const boost::urls::url_view& url,
+                std::function<
+                    void(
+                        const boost::system::error_code& ec,
+                        const std::shared_ptr<wss::connection>& connection)
+                > handler);
 
             /**
-             * A signal raised when a connection is successfully established.
-             *
-             * @param connection The constructed connection object. The connection::run() function
-             *     is called before the signal is raised. Slots should therefore make any desired
-             *     signal connections before the slot returns.
+             * Cancels a pending connection attempt, if any. The handler passed to async_connect()
+             * will be called with the error code boost::asio::error::operation_aborted, if it has
+             * not already been called. Note that it is possible a successful connection attempt
+             * has already been scheduled with the execution context, resulting in the handler
+             * being called with a successful connection even after calling this function.
+             * Cancellation guarantees only that some call to the completion handler, successful
+             * or otherwise, will be scheduled with the execution context.
              */
-            boost::signals2::signal<
-                void(const std::shared_ptr<wss::connection>& connection)
-            > on_connected;
-
-            /**
-             * A signal raised when a connection attempt fails.
-             *
-             * @param ec An error code describing the error.
-             */
-            boost::signals2::signal<
-                void(const boost::system::error_code& ec)
-            > on_error;
+            void cancel();
 
         private:
-
-            void prepare_request(
-                const std::string& path);
-
-            void finish_resolve(
-                const boost::system::error_code& ec,
-                const boost::asio::ip::tcp::resolver::results_type& results);
-
-            void finish_connect(
-                const boost::system::error_code& ec);
-
-            void finish_write(
-                const boost::system::error_code& ec);
-
-            void finish_read(
-                const boost::system::error_code& ec);
 
             std::string get_random_key();
 
         private:
 
-            std::string _hostname;
-            boost::asio::ip::tcp::resolver _resolver;
-            boost::beast::tcp_stream _stream;
-            boost::beast::http::request<boost::beast::http::string_body> _request;
-            boost::beast::flat_buffer _buffer;
-            boost::beast::http::response<boost::beast::http::empty_body> _response;
+            std::shared_ptr<detail::http_client> _http_client;
     };
 }
