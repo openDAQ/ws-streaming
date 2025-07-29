@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <functional>
 #include <iostream>
 #include <memory>
@@ -7,15 +8,15 @@
 
 #include <nlohmann/json.hpp>
 
+#include <ws-streaming/connection.hpp>
 #include <ws-streaming/detail/streaming_protocol.hpp>
 #include <ws-streaming/transport/http_client_servicer.hpp>
-#include <ws-streaming/transport/peer.hpp>
 #include <ws-streaming/transport/server.hpp>
 
 using namespace std::placeholders;
 
 wss::transport::server::server(boost::asio::any_io_executor executor)
-    : strand(boost::asio::make_strand(executor))
+    : _executor(executor)
 {
     add_listener(detail::streaming_protocol::DEFAULT_WEBSOCKET_PORT);
     add_listener(detail::streaming_protocol::DEFAULT_CONTROL_PORT);
@@ -23,7 +24,7 @@ wss::transport::server::server(boost::asio::any_io_executor executor)
 
 void wss::transport::server::run()
 {
-    for (const auto& listener : listeners)
+    for (const auto& listener : _listeners)
     {
         listener.l->run();
     }
@@ -31,37 +32,45 @@ void wss::transport::server::run()
 
 void wss::transport::server::stop()
 {
-    for (const auto& listener : listeners)
+    for (const auto& listener : _listeners)
         listener.l->stop();
-    listeners.clear();
+    _listeners.clear();
 
-    for (const auto& client : clients)
-        client.peer->stop();
-    clients.clear();
+    for (const auto& client : _clients)
+        client.connection->stop();
+    _clients.clear();
 
-    for (const auto& session : sessions)
+    for (const auto& session : _sessions)
         session.client->stop();
-    sessions.clear();
+    _sessions.clear();
 }
 
-void wss::transport::server::debug_broadcast()
+void wss::transport::server::add_signal(local_signal& signal)
 {
-    for (const auto& client : clients)
-        client.peer->send_metadata(0, "hello", {{"foo", "bar"}});
+    if (_signals.emplace(&signal).second)
+        for (const auto& c : _clients)
+            c.connection->add_signal(signal);
+}
+
+void wss::transport::server::remove_signal(local_signal& signal)
+{
+    if (_signals.erase(&signal))
+        for (const auto& c : _clients)
+            c.connection->remove_signal(signal);
 }
 
 void wss::transport::server::add_listener(std::uint16_t port)
 {
     add_listener(
         std::make_shared<listener<>>(
-            strand,
+            _executor,
             boost::asio::ip::tcp::endpoint({}, port)));
 }
 
 void wss::transport::server::add_listener(
     std::shared_ptr<listener<>> listener)
 {
-    listeners.emplace_back(
+    _listeners.emplace_back(
         listener,
         listener->on_accept.connect(std::bind(&server::on_listener_accept, this, _1)));
 }
@@ -74,7 +83,7 @@ void wss::transport::server::on_listener_accept(
 
     std::cout << "accepted connection" << std::endl;
     auto client = std::make_shared<http_client_servicer>(std::move(socket));
-    sessions.emplace_back(
+    _sessions.emplace_back(
         client,
         client->on_control_request.connect(std::bind(&server::on_servicer_control_request, this, client, _1)),
         client->on_websocket_upgrade.connect(std::bind(&server::on_servicer_websocket_upgrade, this, client, _1)),
@@ -97,17 +106,23 @@ void wss::transport::server::on_servicer_websocket_upgrade(
 {
     std::cout << "websocket connection!" << std::endl;
 
-    auto peer = std::make_shared<transport::peer>(
+    auto connection = std::make_shared<wss::connection>(
+        socket.remote_endpoint().address().to_string(),
         std::move(socket),
         false);
 
-    clients.emplace_back(
-        peer,
-        peer->on_data_received.connect(std::bind(&server::on_peer_data_received, this, peer, _1, _2, _3)),
-        peer->on_metadata_received.connect(std::bind(&server::on_peer_metadata_received, this, peer, _1, _2, _3)),
-        peer->on_closed.connect(std::bind(&server::on_peer_closed, this, peer, _1)));
+    for (const auto& signal : _signals)
+        connection->add_signal(*signal);
 
-    peer->run();
+    _clients.emplace_back(
+        connection,
+        connection->on_disconnected.connect(
+            std::bind(
+                &server::on_connection_disconnected,
+                this,
+                connection)));
+
+    connection->run();
 }
 
 void wss::transport::server::on_servicer_closed(
@@ -116,38 +131,19 @@ void wss::transport::server::on_servicer_closed(
 {
     std::cout << "server removing servicer from list (disconnect ec " << ec << ')' << std::endl;
 
-    sessions.remove_if([&](const client_entry& entry)
+    _sessions.remove_if([&](const client_entry& entry)
     {
         return entry.client == servicer;
     });
 }
 
-void wss::transport::server::on_peer_data_received(
-    const std::shared_ptr<peer>& peer,
-    unsigned signo,
-    const std::uint8_t *data,
-    std::size_t size)
+void wss::transport::server::on_connection_disconnected(
+    const std::shared_ptr<wss::connection>& connection)
 {
-    std::cout << "server received data from peer (" << signo << "): " << size << std::endl;
-}
+    std::cout << "server removing peer from list" << std::endl;
 
-void wss::transport::server::on_peer_metadata_received(
-    const std::shared_ptr<peer>& peer,
-    unsigned signo,
-    const std::string& method,
-    const nlohmann::json& params)
-{
-    std::cout << "server received metadata from peer (" << method << "): " << params.dump() << std::endl;
-}
-
-void wss::transport::server::on_peer_closed(
-    const std::shared_ptr<peer>& peer,
-    const boost::system::error_code& ec)
-{
-    std::cout << "server removing peer from list (disconnect ec " << ec << ')' << std::endl;
-
-    clients.remove_if([&](const connected_client& client)
+    _clients.remove_if([&](const connected_client& client)
     {
-        return client.peer == peer;
+        return client.connection == connection;
     });
 }

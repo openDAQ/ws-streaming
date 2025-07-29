@@ -13,9 +13,10 @@
 
 #include <nlohmann/json.hpp>
 
+#include <ws-streaming/local_signal.hpp>
 #include <ws-streaming/remote_signal.hpp>
 #include <ws-streaming/transport/peer.hpp>
-#include <ws-streaming/detail/command_interface.hpp>
+#include <ws-streaming/detail/control_client.hpp>
 #include <ws-streaming/detail/remote_signal_impl.hpp>
 #include <ws-streaming/detail/semver.hpp>
 
@@ -35,6 +36,10 @@ namespace wss
             void run(const void *data, std::size_t size);
 
             void stop();
+
+            void add_signal(local_signal& signal);
+
+            void remove_signal(local_signal& signal);
 
             boost::signals2::signal<
                 void(const std::shared_ptr<remote_signal>&)
@@ -79,6 +84,7 @@ namespace wss
             void handle_subscribe(unsigned signo, const nlohmann::json& params);
             void handle_unsubscribe(unsigned signo, const nlohmann::json& params);
             void handle_unavailable(const nlohmann::json& params);
+            void handle_control_response(const nlohmann::json& params);
 
         private:
 
@@ -102,10 +108,13 @@ namespace wss
 
             detail::semver _api_version;
             std::string _stream_id;
-            std::unique_ptr<detail::command_interface> _command_interface;
+            std::unique_ptr<detail::control_client> _control_client;
 
             boost::signals2::scoped_connection _on_peer_data_received;
             boost::signals2::scoped_connection _on_peer_metadata_received;
             boost::signals2::scoped_connection _on_peer_closed;
+
+            std::map<unsigned, local_signal *> _signals;
+            unsigned _next_signo = 1;
     };
 }

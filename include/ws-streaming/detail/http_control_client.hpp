@@ -8,21 +8,20 @@
 
 #include <boost/asio/any_io_executor.hpp>
 #include <boost/system/error_code.hpp>
-#include <boost/uuid/random_generator.hpp>
 
 #include <nlohmann/json.hpp>
 
-#include <ws-streaming/detail/command_interface.hpp>
+#include <ws-streaming/detail/control_client.hpp>
 #include <ws-streaming/detail/http_client.hpp>
 
 namespace wss::detail
 {
-    class http_command_interface
-        : public command_interface
+    class http_control_client
+        : public control_client
     {
         public:
 
-            http_command_interface(
+            http_control_client(
                 boost::asio::any_io_executor executor,
                 const std::string& hostname,
                 const std::uint16_t port,
@@ -55,8 +54,8 @@ namespace wss::detail
             std::string _http_method;
             std::string _path;
             std::string _version;
+            unsigned _next_id = 1;
 
-            boost::uuids::random_generator _uuid_generator;
             std::set<std::shared_ptr<detail::http_client>> _clients;
     };
 }

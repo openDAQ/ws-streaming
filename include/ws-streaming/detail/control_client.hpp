@@ -7,11 +7,11 @@
 
 namespace wss::detail
 {
-    class command_interface
+    class control_client
     {
         public:
 
-            virtual ~command_interface()
+            virtual ~control_client()
             {
             }
 

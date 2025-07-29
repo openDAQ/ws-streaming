@@ -10,7 +10,8 @@
 #include <boost/asio/ip/tcp.hpp>
 
 #include <ws-streaming/connection.hpp>
-#include <ws-streaming/detail/http_command_interface.hpp>
+#include <ws-streaming/detail/http_control_client.hpp>
+#include <ws-streaming/detail/in_band_control_client.hpp>
 #include <ws-streaming/detail/remote_signal_impl.hpp>
 #include <ws-streaming/detail/semver.hpp>
 #include <ws-streaming/transport/peer.hpp>
@@ -51,12 +52,60 @@ void wss::connection::stop()
     _peer->stop();
 }
 
+void wss::connection::add_signal(local_signal& signal)
+{
+    _signals.emplace(_next_signo++, &signal);
+}
+
+void wss::connection::remove_signal(local_signal& signal)
+{
+    auto it = std::find_if(
+        _signals.begin(),
+        _signals.end(),
+        [signal = &signal](const std::pair<unsigned, local_signal *>& entry)
+        {
+            return entry.second == signal;
+        });
+
+    if (it != _signals.end())
+        _signals.erase(it);
+}
+
 void wss::connection::do_hello()
 {
     _peer->send_metadata(
         0,
-        "",
-        {});
+        "apiVersion",
+        {
+            { "version", "2.0.0" }
+        });
+
+    _peer->send_metadata(
+        0,
+        "init",
+        {
+            { "streamId",
+                _peer->socket().remote_endpoint().address().to_string()
+                    + ":" + std::to_string(_peer->socket().remote_endpoint().port()) },
+            { "commandInterfaces", {
+                { "jsonrpc", nullptr }
+            } }
+        });
+
+    if (!_signals.empty())
+    {
+        auto signal_ids = nlohmann::json::array();
+
+        for (const auto& signal : _signals)
+            signal_ids.emplace_back(signal.second->id());
+
+        _peer->send_metadata(
+            0,
+            "available",
+            {
+                { "signalIds", signal_ids }
+            });
+    }
 }
 
 void wss::connection::on_peer_data_received(
@@ -92,6 +141,8 @@ void wss::connection::on_peer_metadata_received(
         handle_available(params);
     else if (method == "unavailable")
         handle_available(params);
+    else if (method == "controlResponse")
+        handle_control_response(params);
 }
 
 void wss::connection::on_peer_closed(
@@ -116,26 +167,28 @@ void wss::connection::on_peer_closed(
     on_disconnected();
 }
 
-void wss::connection::on_signal_subscribe_requested(const std::string& signal_id)
+void wss::connection::on_signal_subscribe_requested(
+    const std::string& signal_id)
 {
     std::cout << "someone requested signal subscribe to " << signal_id << std::endl;
-    if (!_command_interface)
+    if (!_control_client)
         return; // @todo XXX TODO
 
-    _command_interface->async_request(_stream_id + ".subscribe", { signal_id },
+    _control_client->async_request(_stream_id + ".subscribe", { signal_id },
         [](const boost::system::error_code& ec, const nlohmann::json& response)
         {
             std::cout << "subscribe control request done: " << ec << " " << response.dump() << std::endl;
         });
 }
 
-void wss::connection::on_signal_unsubscribe_requested(const std::string& signal_id)
+void wss::connection::on_signal_unsubscribe_requested(
+    const std::string& signal_id)
 {
     std::cout << "someone requested signal unsubscribe from " << signal_id << std::endl;
-    if (!_command_interface)
+    if (!_control_client)
         return; // @todo XXX TODO
 
-    _command_interface->async_request(_stream_id + ".unsubscribe", { signal_id },
+    _control_client->async_request(_stream_id + ".unsubscribe", { signal_id },
         [](const boost::system::error_code& ec, const nlohmann::json& response)
         {
             std::cout << "unsubscribe control request done: " << ec << " " << response.dump() << std::endl;
@@ -154,7 +207,8 @@ void wss::connection::dispatch_metadata(
     it->second->signal->handle_metadata(method, params);
 }
 
-void wss::connection::handle_api_version(const nlohmann::json& params)
+void wss::connection::handle_api_version(
+    const nlohmann::json& params)
 {
     if (params.is_object()
             && params.contains("version")
@@ -162,7 +216,8 @@ void wss::connection::handle_api_version(const nlohmann::json& params)
         _api_version = detail::semver::try_parse(params["version"]).value_or(detail::semver());
 }
 
-void wss::connection::handle_init(const nlohmann::json& params)
+void wss::connection::handle_init(
+    const nlohmann::json& params)
 {
     if (!params.is_object())
         return;
@@ -174,7 +229,13 @@ void wss::connection::handle_init(const nlohmann::json& params)
         && params["commandInterfaces"].is_object())
     {
         const auto& ci = params["commandInterfaces"];
-        if (ci.contains("jsonrpc-http")
+
+        if (ci.contains("jsonrpc"))
+        {
+            _control_client = std::make_unique<detail::in_band_control_client>(_peer);
+        }
+
+        else if (ci.contains("jsonrpc-http")
             && ci["jsonrpc-http"].is_object()
             && ci["jsonrpc-http"].contains("httpMethod")
             && ci["jsonrpc-http"]["httpMethod"].is_string()
@@ -191,7 +252,7 @@ void wss::connection::handle_init(const nlohmann::json& params)
             else
                 port = std::strtoul(std::string(ci["jsonrpc-http"]["port"]).c_str(), nullptr, 10);
 
-            _command_interface = std::make_unique<detail::http_command_interface>(
+            _control_client = std::make_unique<detail::http_control_client>(
                 _peer->socket().get_executor(),
                 _hostname,
                 port,
@@ -205,7 +266,8 @@ void wss::connection::handle_init(const nlohmann::json& params)
         do_hello();
 }
 
-void wss::connection::handle_available(const nlohmann::json& params)
+void wss::connection::handle_available(
+    const nlohmann::json& params)
 {
     if (!params.is_object() || !params.contains("signalIds") || !params["signalIds"].is_array())
         return;
@@ -231,7 +293,9 @@ void wss::connection::handle_available(const nlohmann::json& params)
     }
 }
 
-void wss::connection::handle_subscribe(unsigned signo, const nlohmann::json& params)
+void wss::connection::handle_subscribe(
+    unsigned signo,
+    const nlohmann::json& params)
 {
     if (!params.is_object()
             || !params.contains("signalId")
@@ -247,16 +311,21 @@ void wss::connection::handle_subscribe(unsigned signo, const nlohmann::json& par
     dispatch_metadata(signo, "subscribe", params);
 }
 
-void wss::connection::handle_unsubscribe(unsigned signo, const nlohmann::json& params)
+void wss::connection::handle_unsubscribe(
+    unsigned signo,
+    const nlohmann::json& params)
 {
     dispatch_metadata(signo, "unsubscribe", params);
 
     _signals_by_signo.erase(signo);
 }
 
-void wss::connection::handle_unavailable(const nlohmann::json& params)
+void wss::connection::handle_unavailable(
+    const nlohmann::json& params)
 {
-    if (!params.is_object() || !params.contains("signalIds") || !params["signalIds"].is_array())
+    if (!params.is_object()
+            || !params.contains("signalIds")
+            || !params["signalIds"].is_array())
         return;
 
     for (const auto& id : params["signalIds"])
@@ -275,4 +344,10 @@ void wss::connection::handle_unavailable(const nlohmann::json& params)
         signal->detach();
         on_unavailable(signal);
     }
+}
+
+void wss::connection::handle_control_response(const nlohmann::json& params)
+{
+    if (auto *client = dynamic_cast<detail::in_band_control_client *>(_control_client.get()); client)
+        client->handle_response(params);
 }

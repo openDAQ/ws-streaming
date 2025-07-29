@@ -7,14 +7,18 @@
 
 #include <boost/asio.hpp>
 
+#include <ws-streaming/local_signal.hpp>
 #include <ws-streaming/transport/server.hpp>
 
 static std::function<void()> do_exit;
 
 int main(int argc, char *argv[])
 {
+    wss::local_signal ai0("ai0");
+
     boost::asio::io_context ioc(1);
     wss::transport::server server(ioc.get_executor());
+    server.add_signal(ai0);
     server.run();
 
     boost::asio::deadline_timer t(ioc);
@@ -27,24 +31,11 @@ int main(int argc, char *argv[])
         server.stop();
     });
 
-    boost::asio::deadline_timer t2(ioc);
-    auto do_broadcast = [&](const boost::system::error_code& ec)
-    {
-        if (ec)
-            return;
-        std::cout << "doing broadcast" << std::endl;
-        server.debug_broadcast();
-    };
-
-    t2.expires_from_now(boost::posix_time::seconds(2));
-    t2.async_wait(do_broadcast);
-
     do_exit = [&]()
     {
         std::cout << "interrupted, stopping server" << std::endl;
         server.stop();
         t.cancel();
-        t2.cancel();
     };
 
     ::signal(SIGINT, [](int signal)

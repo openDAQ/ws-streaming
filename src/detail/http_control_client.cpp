@@ -13,14 +13,13 @@
 #include <boost/beast/http/string_body.hpp>
 #include <boost/beast/http/verb.hpp>
 #include <boost/beast/version.hpp>
-#include <boost/uuid/uuid_io.hpp>
 
 #include <nlohmann/json.hpp>
 
 #include <ws-streaming/detail/http_client.hpp>
-#include <ws-streaming/detail/http_command_interface.hpp>
+#include <ws-streaming/detail/http_control_client.hpp>
 
-wss::detail::http_command_interface::http_command_interface(
+wss::detail::http_control_client::http_control_client(
         boost::asio::any_io_executor executor,
         const std::string& hostname,
         const std::uint16_t port,
@@ -36,7 +35,7 @@ wss::detail::http_command_interface::http_command_interface(
 {
 }
 
-void wss::detail::http_command_interface::async_request(
+void wss::detail::http_control_client::async_request(
     const std::string& method,
     const nlohmann::json& params,
     std::function<
@@ -55,7 +54,7 @@ void wss::detail::http_command_interface::async_request(
 
     request.body() = nlohmann::json({
         { "jsonrpc", "2.0" },
-        { "id", boost::uuids::to_string(_uuid_generator()) },
+        { "id", _next_id++ },
         { "method", method },
         { "params", params },
     }).dump();
@@ -96,7 +95,7 @@ void wss::detail::http_command_interface::async_request(
     _clients.emplace(std::move(client));
 }
 
-void wss::detail::http_command_interface::cancel()
+void wss::detail::http_control_client::cancel()
 {
     for (const auto& client : _clients)
         client->cancel();
