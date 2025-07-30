@@ -13,7 +13,7 @@ namespace wss::detail
     namespace streaming_protocol
     {
         constexpr std::uint16_t DEFAULT_WEBSOCKET_PORT = 7414;              /**< The default TCP port for WebSocket connections. */
-        constexpr std::uint16_t DEFAULT_CONTROL_PORT = 7438;                /**< The default TCP port for HTTP control channel connections. */
+        constexpr std::uint16_t DEFAULT_COMMAND_INTERFACE_PORT = 7438;      /**< The default TCP port for HTTP command interface channel connections. */
         constexpr std::size_t MAX_HEADER_SIZE = 2 * sizeof(std::uint32_t);  /**< The maximum possible packet header size, in bytes. */
 
         /**

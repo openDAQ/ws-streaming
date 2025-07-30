@@ -17,9 +17,9 @@
 #include <nlohmann/json.hpp>
 
 #include <ws-streaming/detail/http_client.hpp>
-#include <ws-streaming/detail/http_control_client.hpp>
+#include <ws-streaming/detail/http_command_interface_client.hpp>
 
-wss::detail::http_control_client::http_control_client(
+wss::detail::http_command_interface_client::http_command_interface_client(
         boost::asio::any_io_executor executor,
         const std::string& hostname,
         const std::uint16_t port,
@@ -35,7 +35,7 @@ wss::detail::http_control_client::http_control_client(
 {
 }
 
-void wss::detail::http_control_client::async_request(
+void wss::detail::http_command_interface_client::async_request(
     const std::string& method,
     const nlohmann::json& params,
     std::function<
@@ -95,7 +95,7 @@ void wss::detail::http_control_client::async_request(
     _clients.emplace(std::move(client));
 }
 
-void wss::detail::http_control_client::cancel()
+void wss::detail::http_command_interface_client::cancel()
 {
     for (const auto& client : _clients)
         client->cancel();

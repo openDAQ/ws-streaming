@@ -11,17 +11,17 @@
 
 #include <nlohmann/json.hpp>
 
-#include <ws-streaming/detail/control_client.hpp>
+#include <ws-streaming/detail/command_interface_client.hpp>
 #include <ws-streaming/detail/http_client.hpp>
 
 namespace wss::detail
 {
-    class http_control_client
-        : public control_client
+    class http_command_interface_client
+        : public command_interface_client
     {
         public:
 
-            http_control_client(
+            http_command_interface_client(
                 boost::asio::any_io_executor executor,
                 const std::string& hostname,
                 const std::uint16_t port,

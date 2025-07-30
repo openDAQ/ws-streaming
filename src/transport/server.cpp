@@ -19,7 +19,7 @@ wss::transport::server::server(boost::asio::any_io_executor executor)
     : _executor(executor)
 {
     add_listener(detail::streaming_protocol::DEFAULT_WEBSOCKET_PORT);
-    add_listener(detail::streaming_protocol::DEFAULT_CONTROL_PORT);
+    add_listener(detail::streaming_protocol::DEFAULT_COMMAND_INTERFACE_PORT);
 }
 
 void wss::transport::server::run()
@@ -85,18 +85,18 @@ void wss::transport::server::on_listener_accept(
     auto client = std::make_shared<http_client_servicer>(std::move(socket));
     _sessions.emplace_back(
         client,
-        client->on_control_request.connect(std::bind(&server::on_servicer_control_request, this, client, _1)),
+        client->on_command_interface_request.connect(std::bind(&server::on_servicer_command_interface_request, this, client, _1)),
         client->on_websocket_upgrade.connect(std::bind(&server::on_servicer_websocket_upgrade, this, client, _1)),
         client->on_closed.connect(std::bind(&server::on_servicer_closed, this, client, _1)));
 
     client->run();
 }
 
-nlohmann::json wss::transport::server::on_servicer_control_request(
+nlohmann::json wss::transport::server::on_servicer_command_interface_request(
     const std::shared_ptr<http_client_servicer>& servicer,
     const nlohmann::json& request)
 {
-    std::cout << "control request: " << request.dump() << std::endl;
+    std::cout << "command interface request: " << request.dump() << std::endl;
     return nlohmann::json::object();    
 }
 

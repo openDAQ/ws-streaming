@@ -142,7 +142,7 @@ void wss::transport::http_client_servicer::finish_read(
 
         try
         {
-            response_json = on_control_request(
+            response_json = on_command_interface_request(
                 request_json["method"],
                 request_json.contains("params") ? request_json["params"] : nullptr);
         }

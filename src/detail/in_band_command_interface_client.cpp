@@ -8,15 +8,15 @@
 #include <nlohmann/json.hpp>
 
 #include <ws-streaming/transport/peer.hpp>
-#include <ws-streaming/detail/in_band_control_client.hpp>
+#include <ws-streaming/detail/in_band_command_interface_client.hpp>
 
-wss::detail::in_band_control_client::in_band_control_client(
+wss::detail::in_band_command_interface_client::in_band_command_interface_client(
         std::shared_ptr<transport::peer> peer)
     : _peer(peer)
 {
 }
 
-void wss::detail::in_band_control_client::async_request(
+void wss::detail::in_band_command_interface_client::async_request(
     const std::string& method,
     const nlohmann::json& params,
     std::function<
@@ -29,7 +29,7 @@ void wss::detail::in_band_control_client::async_request(
 
     _peer->send_metadata(
         0,
-        "controlRequest",
+        "request",
         {
             { "jsonrpc", "2.0" },
             { "id", id },
@@ -40,7 +40,7 @@ void wss::detail::in_band_control_client::async_request(
     _requests.emplace(id, std::move(handler));
 }
 
-void wss::detail::in_band_control_client::cancel()
+void wss::detail::in_band_command_interface_client::cancel()
 {
     decltype(_requests) old_requests;
 
@@ -50,7 +50,7 @@ void wss::detail::in_band_control_client::cancel()
         entry.second(boost::asio::error::operation_aborted, nullptr);
 }
 
-void wss::detail::in_band_control_client::handle_response(const nlohmann::json& params)
+void wss::detail::in_band_command_interface_client::handle_response(const nlohmann::json& params)
 {
     if (!params.contains("id")
             || !params["id"].is_number_integer())

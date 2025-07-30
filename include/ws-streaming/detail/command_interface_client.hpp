@@ -3,15 +3,17 @@
 #include <functional>
 #include <string>
 
+#include <boost/system/error_code.hpp>
+
 #include <nlohmann/json.hpp>
 
 namespace wss::detail
 {
-    class control_client
+    class command_interface_client
     {
         public:
 
-            virtual ~control_client()
+            virtual ~command_interface_client()
             {
             }
 

@@ -30,7 +30,7 @@ namespace wss::transport
 
             // boost::signals2::signal<void()> on_metadata;
             // boost::signals2::signal<void()> on_data;
-            // boost::signals2::signal<nlohmann::json(const nlohmann::json& request)> on_control_request;
+            // boost::signals2::signal<nlohmann::json(const nlohmann::json& request)> on_command_interface_request;
 
         private:
 
@@ -38,7 +38,7 @@ namespace wss::transport
             void add_listener(std::shared_ptr<listener<>> listener);
 
             void on_listener_accept(boost::asio::ip::tcp::socket& socket);
-            nlohmann::json on_servicer_control_request(const std::shared_ptr<http_client_servicer>& servicer, const nlohmann::json& request);
+            nlohmann::json on_servicer_command_interface_request(const std::shared_ptr<http_client_servicer>& servicer, const nlohmann::json& request);
             void on_servicer_websocket_upgrade(const std::shared_ptr<http_client_servicer>& servicer, boost::asio::ip::tcp::socket& socket);
             void on_servicer_closed(const std::shared_ptr<http_client_servicer>& servicer, const boost::system::error_code& ec);
             void on_connection_disconnected(const std::shared_ptr<wss::connection>& connection);
@@ -62,18 +62,18 @@ namespace wss::transport
                 client_entry(
                         std::shared_ptr<http_client_servicer> client,
                         boost::signals2::scoped_connection on_websocket_upgrade,
-                        boost::signals2::scoped_connection on_control_request,
+                        boost::signals2::scoped_connection on_command_interface_request,
                         boost::signals2::scoped_connection on_closed)
                     : client(client)
                     , on_websocket_upgrade(std::move(on_websocket_upgrade))
-                    , on_control_request(std::move(on_control_request))
+                    , on_command_interface_request(std::move(on_command_interface_request))
                     , on_closed(std::move(on_closed))
                 {
                 }
 
                 std::shared_ptr<http_client_servicer> client;
                 boost::signals2::scoped_connection on_websocket_upgrade;
-                boost::signals2::scoped_connection on_control_request;
+                boost::signals2::scoped_connection on_command_interface_request;
                 boost::signals2::scoped_connection on_closed;
             };
 

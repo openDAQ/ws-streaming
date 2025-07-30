@@ -9,17 +9,17 @@
 
 #include <nlohmann/json.hpp>
 
-#include <ws-streaming/detail/control_client.hpp>
+#include <ws-streaming/detail/command_interface_client.hpp>
 #include <ws-streaming/transport/peer.hpp>
 
 namespace wss::detail
 {
-    class in_band_control_client
-        : public control_client
+    class in_band_command_interface_client
+        : public command_interface_client
     {
         public:
 
-            in_band_control_client(
+            in_band_command_interface_client(
                 std::shared_ptr<transport::peer> peer);
 
             void async_request(

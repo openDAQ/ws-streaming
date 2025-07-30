@@ -18,13 +18,13 @@
 namespace wss::transport
 {
     /**
-     * Implements an asynchronous HTTP server which accepts WebSocket Streaming Protocol control
-     * requests and WebSocket connections. Servicer objects manage a single connection. If an HTTP
-     * control request is received, the on_control_request signal is raised. Connected slots
-     * should handle the request and return a response to be transmitted to the client. If a
-     * WebSocket upgrade request is received, the on_websocket_upgrade signal is raised. When the
-     * connection is closed, or after a WebSocket upgrade request has been handled, the on_closed
-     * event is raised.
+     * Implements an asynchronous HTTP server which accepts WebSocket Streaming Protocol command
+     * interface requests and WebSocket connections. Servicer objects manage a single connection.
+     * If an HTTP command interface request is received, the on_command_interface_request signal
+     * is raised. Connected slots should handle the request and return a response to be
+     * transmitted to the client. If a WebSocket upgrade request is received, the
+     * on_websocket_upgrade signal is raised. When the connection is closed, or after a WebSocket
+     * upgrade request has been handled, the on_closed event is raised.
      *
      * Servicer objects are constructed with, and take ownership of, a connected Boost.Asio
      * socket, and must always be managed by a std::shared_ptr, following the normal Boost.Asio
@@ -66,14 +66,15 @@ namespace wss::transport
             void stop();
 
             /**
-             * A signal raised when a client issues a JSON-RPC control request. Connected slots
-             * should service the request and return a JSON response object to be sent back to the
-             * client. If multiple slots are connected, the return value of the last (most
-             * recently connected) slot is used. If no slots are connected, or if a slot throws an
-             * exception, a 500 Internal Server Error response is sent back to the client.
+             * A signal raised when a client issues a JSON-RPC command interface request.
+             * Connected slots should service the request and return a JSON response object to be
+             * sent back to the client. If multiple slots are connected, the return value of the
+             * last (most recently connected) slot is used. If no slots are connected, or if a
+             * slot throws an exception, a 500 Internal Server Error response is sent back to the
+             * client.
              *
-             * @param method The control request method name.
-             * @param params A JSON value containing the control request parameters.
+             * @param method The command interface request method name.
+             * @param params A JSON value containing the command interface request parameters.
              *
              * @throws std::exception An error occurred. A 500 Internal Server Error response is
              *     sent back to the client.
@@ -86,7 +87,7 @@ namespace wss::transport
                 nlohmann::json(
                     const std::string& method,
                     const nlohmann::json& params)
-            > on_control_request;
+            > on_command_interface_request;
 
             boost::signals2::signal<
                 void(boost::asio::ip::tcp::socket&)
