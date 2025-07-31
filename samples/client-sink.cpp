@@ -1,7 +1,7 @@
 // This example demonstrates how to implement a TCP client which acts as a data sink. It
-// subscribes to the signal "/Value", and prints messages to the console when data packets are
-// received. The "server-source" sample provides a suitable server for this demo to connect to.
-// Press Ctrl+C to gracefully shut down the client.
+// connects to a streaming server, then subscribes to the signal "/Value", and prints messages to
+// the console when data packets are received. The "server-source" sample provides a suitable
+// server for this demo to connect to. Press Ctrl+C to gracefully shut down the client.
 
 #include <cstddef>
 #include <cstdint>
@@ -11,6 +11,7 @@
 #include <string>
 
 #include <boost/asio/io_context.hpp>
+#include <boost/asio/signal_set.hpp>
 #include <boost/system/error_code.hpp>
 
 #include <ws-streaming/ws-streaming.hpp>

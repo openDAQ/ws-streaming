@@ -1,4 +1,8 @@
-find_package(Boost 1.82 QUIET GLOBAL COMPONENTS url)
+option(WS_STREAMING_IGNORE_INSTALLED_BOOST "Don't use the preinstalled Boost library, if present" OFF)
+
+if(NOT WS_STREAMING_IGNORE_INSTALLED_BOOST)
+    find_package(Boost 1.82 QUIET GLOBAL COMPONENTS url)
+endif()
 
 if(Boost_FOUND)
 

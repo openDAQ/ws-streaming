@@ -12,6 +12,7 @@
 #include <ws-streaming/connection.hpp>
 #include <ws-streaming/listener.hpp>
 #include <ws-streaming/local_signal.hpp>
+#include <ws-streaming/remote_signal.hpp>
 #include <ws-streaming/detail/http_client_servicer.hpp>
 
 namespace wss
@@ -28,9 +29,27 @@ namespace wss
             void add_signal(local_signal& signal);
             void remove_signal(local_signal& signal);
 
-            // boost::signals2::signal<void()> on_metadata;
-            // boost::signals2::signal<void()> on_data;
-            // boost::signals2::signal<nlohmann::json(const nlohmann::json& request)> on_command_interface_request;
+            boost::signals2::signal<
+                void(
+                    const std::shared_ptr<wss::connection>& connection,
+                    const std::shared_ptr<wss::remote_signal>& signal)
+            > on_available;
+
+            boost::signals2::signal<
+                void(
+                    const std::shared_ptr<wss::connection>& connection)
+            > on_client_connected;
+
+            boost::signals2::signal<
+                void(
+                    const std::shared_ptr<wss::connection>& connection,
+                    const std::shared_ptr<wss::remote_signal>& signal)
+            > on_unavailable;
+
+            boost::signals2::signal<
+                void(
+                    const std::shared_ptr<wss::connection>& connection)
+            > on_client_disconnected;
 
         private:
 
@@ -39,9 +58,20 @@ namespace wss
 
             void on_listener_accept(boost::asio::ip::tcp::socket& socket);
             nlohmann::json on_servicer_command_interface_request(const std::shared_ptr<detail::http_client_servicer>& servicer, const nlohmann::json& request);
+
             void on_servicer_websocket_upgrade(const std::shared_ptr<detail::http_client_servicer>& servicer, boost::asio::ip::tcp::socket& socket);
             void on_servicer_closed(const std::shared_ptr<detail::http_client_servicer>& servicer, const boost::system::error_code& ec);
-            void on_connection_disconnected(const std::shared_ptr<wss::connection>& connection);
+
+            void on_connection_available(
+                const std::shared_ptr<wss::connection>& connection,
+                const std::shared_ptr<remote_signal>& signal);
+
+            void on_connection_unavailable(
+                const std::shared_ptr<wss::connection>& connection,
+                const std::shared_ptr<remote_signal>& signal);
+
+            void on_connection_disconnected(
+                const std::shared_ptr<wss::connection>& connection);
 
             struct listener_entry
             {
@@ -79,15 +109,14 @@ namespace wss
 
             struct connected_client
             {
-                connected_client(
-                        std::shared_ptr<wss::connection> connection,
-                        boost::signals2::scoped_connection on_disconnected)
+                connected_client(std::shared_ptr<wss::connection> connection)
                     : connection(connection)
-                    , on_disconnected(std::move(on_disconnected))
                 {
                 }
 
                 std::shared_ptr<wss::connection> connection;
+                boost::signals2::scoped_connection on_available;
+                boost::signals2::scoped_connection on_unavailable;
                 boost::signals2::scoped_connection on_disconnected;
             };
 

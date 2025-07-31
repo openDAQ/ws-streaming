@@ -37,3 +37,11 @@ target_link_libraries(${PROJECT_NAME}
         Boost::url
         nlohmann_json::nlohmann_json
 )
+
+if(TARGET Boost::asio)
+    target_link_libraries(${PROJECT_NAME} PUBLIC Boost::asio)
+endif()
+
+if(TARGET Boost::signals2)
+    target_link_libraries(${PROJECT_NAME} PUBLIC Boost::signals2)
+endif()

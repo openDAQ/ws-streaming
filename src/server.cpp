@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <functional>
+#include <iostream>
 #include <memory>
 #include <utility>
 
@@ -111,15 +112,31 @@ void wss::server::on_servicer_websocket_upgrade(
     for (const auto& signal : _signals)
         connection->add_signal(*signal);
 
-    _clients.emplace_back(
-        connection,
-        connection->on_disconnected.connect(
-            std::bind(
-                &server::on_connection_disconnected,
-                this,
-                connection)));
+    auto& entry = _clients.emplace_back(connection);
+
+    entry.on_available = connection->on_available.connect(
+        std::bind(
+            &server::on_connection_available,
+            this,
+            connection,
+            _1));
+
+    entry.on_unavailable = connection->on_unavailable.connect(
+        std::bind(
+            &server::on_connection_unavailable,
+            this,
+            connection,
+            _1));
+
+    entry.on_disconnected = connection->on_disconnected.connect(
+        std::bind(
+            &server::on_connection_disconnected,
+            this,
+            connection));
 
     connection->run();
+
+    on_client_connected(connection);
 }
 
 void wss::server::on_servicer_closed(
@@ -132,6 +149,20 @@ void wss::server::on_servicer_closed(
     });
 }
 
+void wss::server::on_connection_available(
+    const std::shared_ptr<wss::connection>& connection,
+    const std::shared_ptr<remote_signal>& signal)
+{
+    on_available(connection, signal);
+}
+
+void wss::server::on_connection_unavailable(
+    const std::shared_ptr<wss::connection>& connection,
+    const std::shared_ptr<remote_signal>& signal)
+{
+    on_unavailable(connection, signal);
+}
+
 void wss::server::on_connection_disconnected(
     const std::shared_ptr<wss::connection>& connection)
 {
@@ -139,4 +170,6 @@ void wss::server::on_connection_disconnected(
     {
         return client.connection == connection;
     });
+
+    on_client_disconnected(connection);
 }

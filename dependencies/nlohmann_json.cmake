@@ -1,4 +1,8 @@
-find_package(nlohmann_json 3.12.0 QUIET GLOBAL)
+option(WS_STREAMING_IGNORE_INSTALLED_NLOHMANN_JSON "Don't use the preinstalled nlohmann/json library, if present" OFF)
+
+if(NOT WS_STREAMING_IGNORE_INSTALLED_NLOHMANN_JSON)
+    find_package(nlohmann_json 3.12.0 QUIET GLOBAL)
+endif()
 
 if(nlohmann_json_FOUND)
 
