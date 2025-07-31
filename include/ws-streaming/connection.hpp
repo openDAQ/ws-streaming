@@ -77,8 +77,7 @@ namespace wss
                 const boost::system::error_code& ec);
 
             void on_local_signal_metadata_changed(
-                unsigned signo,
-                const wss::metadata& metadata);
+                detail::local_signal_container::local_signal_entry& signal);
 
             void on_local_signal_data_published(
                 detail::local_signal_container::local_signal_entry& signal,

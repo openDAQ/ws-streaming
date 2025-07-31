@@ -5,11 +5,6 @@
 
 #include <ws-streaming/metadata.hpp>
 
-wss::metadata::metadata()
-    : _json(nlohmann::json::object())
-{
-}
-
 wss::metadata::metadata(const nlohmann::json& json)
     : _json(json.is_object() ? json : nlohmann::json::object())
 {

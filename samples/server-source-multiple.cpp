@@ -1,9 +1,12 @@
 // This example demonstrates how to implement a TCP server which acts as a data source. It exposes
-// a single time-domain channel, consisting of an explicit-rule value signal named "Value" and a
-// linear-rule domain signal named "Time". Press Ctrl+C to gracefully shut down the server.
+// two time-domain channels, consisting of explicit-rule value signals named "Value1" and "Value2"
+// and a common linear-rule domain signal named "Time". Press Ctrl+C to gracefully shut down the
+// server.
 
+#include <array>
 #include <atomic>
 #include <chrono>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -32,14 +35,25 @@ int main(int argc, char *argv[])
             .build()};
 
     // Declare our explicit-rule value signals.
-    wss::local_signal value_signal{
-        "/Value",
-        wss::metadata_builder{"Value"}
-            .data_type(wss::data_types::real64)
-            .unit(wss::unit::volts)
-            .range(-10, 10)
-            .table(time_signal.id())
-            .build()};
+    std::array<wss::local_signal, 2> value_signals
+    {
+        wss::local_signal{
+            "/Value1",
+            wss::metadata_builder{"Value1"}
+                .data_type(wss::data_types::real64)
+                .unit(wss::unit::volts)
+                .range(-10, 10)
+                .table(time_signal.id())
+                .build()},
+        wss::local_signal{
+            "/Value2",
+            wss::metadata_builder{"Value2"}
+                .data_type(wss::data_types::real64)
+                .unit(wss::unit::volts)
+                .range(-10, 10)
+                .table(time_signal.id())
+                .build()},
+    };
 
     // Set up a single-threaded Boost.Asio execution context.
     boost::asio::io_context ioc{1};
@@ -47,7 +61,8 @@ int main(int argc, char *argv[])
     // Create the WebSocket Streaming server and register our signals.
     wss::server server{ioc.get_executor()};
     server.add_signal(time_signal);
-    server.add_signal(value_signal);
+    for (auto& value_signal : value_signals)
+        server.add_signal(value_signal);
     server.run();
 
     // Set up a signal handler to stop the server when Ctrl+C is pressed.
@@ -71,11 +86,12 @@ int main(int argc, char *argv[])
             when += 100ms;
             std::this_thread::sleep_until(when);
 
-            value_signal.publish_data(
-                when.time_since_epoch().count(),
-                samples.size(),
-                samples.data(),
-                sizeof(decltype(samples)::value_type) * samples.size());
+            for (auto& value_signal : value_signals)
+                value_signal.publish_data(
+                    when.time_since_epoch().count(),
+                    samples.size(),
+                    samples.data(),
+                    sizeof(decltype(samples)::value_type) * samples.size());
         }
     }};
 

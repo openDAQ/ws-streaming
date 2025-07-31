@@ -2,7 +2,7 @@
 
 namespace wss
 {
-    struct data_types
+    namespace data_types
     {
         static constexpr const char *int8 = "int8";
         static constexpr const char *int16 = "int16";

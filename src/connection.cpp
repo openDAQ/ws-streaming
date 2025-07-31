@@ -163,11 +163,10 @@ void wss::connection::on_peer_closed(
 }
 
 void wss::connection::on_local_signal_metadata_changed(
-    unsigned signo,
-    const wss::metadata& metadata)
+    detail::local_signal_container::local_signal_entry& signal)
 {
     std::cout << "on_local_signal_metadata_changed" << std::endl;
-    _peer->send_metadata(signo, "signal", metadata.json());
+    _peer->send_metadata(signal.signo, "signal", signal.signal.metadata().json());
 }
 
 void wss::connection::on_local_signal_data_published(
@@ -520,8 +519,7 @@ bool wss::connection::subscribe(
         std::bind(
             &connection::on_local_signal_metadata_changed,
             shared_from_this(),
-            signal->signo,
-            _1));
+            std::ref(*signal)));
 
     return true;
 }

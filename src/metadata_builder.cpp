@@ -4,9 +4,9 @@
 #include <nlohmann/json.hpp>
 
 #include <ws-streaming/metadata_builder.hpp>
+#include <ws-streaming/unit.hpp>
 
 wss::metadata_builder::metadata_builder(
-        const std::string& id,
         const std::string& name)
     : _metadata(
         {
@@ -24,13 +24,13 @@ wss::metadata_builder::metadata_builder(
                     { "parameters", nullptr }
                 } }
             } },
-            { "tableId", id },
             { "valueIndex", 0 }
         })
 {
 }
 
 wss::metadata_builder::metadata_builder(
+        from_json_t,
         const nlohmann::json& metadata)
     : _metadata(metadata)
 {
@@ -73,12 +73,46 @@ wss::metadata_builder& wss::metadata_builder::origin(
     return *this;
 }
 
+wss::metadata_builder& wss::metadata_builder::range(
+    double low,
+    double high)
+{
+    _metadata["definition"]["range"] = {
+        { "low", low },
+        { "high", high }
+    };
+
+    return *this;
+}
+
 wss::metadata_builder& wss::metadata_builder::table(
     const std::string& id)
 {
     _metadata["tableId"] = id;
 
     return *this;
+}
+
+wss::metadata_builder& wss::metadata_builder::tick_resolution(
+    std::uint64_t numerator,
+    std::uint64_t denominator)
+{
+    _metadata["definition"]["resolution"] = {
+        { "num", numerator },
+        { "denom", denominator }
+    };
+
+    return *this;
+}
+
+wss::metadata_builder& wss::metadata_builder::unit(
+    const wss::unit& unit)
+{
+    return this->unit(
+        unit.id(),
+        unit.name(),
+        unit.quantity(),
+        unit.symbol());
 }
 
 wss::metadata_builder& wss::metadata_builder::unit(
@@ -98,30 +132,6 @@ wss::metadata_builder& wss::metadata_builder::unit(
         { "name", name },
         { "quantity", quantity },
         { "symbol", symbol },
-    };
-
-    return *this;
-}
-
-wss::metadata_builder& wss::metadata_builder::range(
-    double low,
-    double high)
-{
-    _metadata["definition"]["range"] = {
-        { "low", low },
-        { "high", high }
-    };
-
-    return *this;
-}
-
-wss::metadata_builder& wss::metadata_builder::resolution(
-    std::uint64_t numerator,
-    std::uint64_t denominator)
-{
-    _metadata["definition"]["resolution"] = {
-        { "num", numerator },
-        { "denom", denominator }
     };
 
     return *this;
