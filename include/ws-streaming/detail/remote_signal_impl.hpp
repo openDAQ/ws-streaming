@@ -1,7 +1,10 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
+#include <memory>
 #include <string>
+#include <utility>
 
 #include <boost/signals2/signal.hpp>
 
@@ -31,11 +34,31 @@ namespace wss::detail
 
             void detach();
 
+            void signo(unsigned signo);
+
             boost::signals2::signal<void()> on_subscribe_requested;
             boost::signals2::signal<void()> on_unsubscribe_requested;
+            boost::signals2::signal<std::shared_ptr<remote_signal_impl>(const std::string& id)> on_signal_sought;
+
+        private:
+
+            void handle_subscribe();
+            void handle_unsubscribe();
+            void handle_signal(const nlohmann::json& params);
+
+            std::int64_t value_index() const noexcept;
+            std::int64_t linear_value() const noexcept;
 
         private:
 
             unsigned _subscription_count = 0;
+            std::shared_ptr<remote_signal_impl> _domain_signal;
+
+            bool _is_linear = false;
+            std::pair<std::int64_t, std::int64_t> _linear_start_delta = std::make_pair(0, 0);
+
+            std::int64_t _value_index = 0;
+            std::int64_t _linear_value = 0;
+            std::size_t _sample_size = 0;
     };
 }

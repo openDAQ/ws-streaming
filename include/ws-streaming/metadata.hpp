@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -63,12 +64,30 @@ namespace wss
             std::pair<std::int64_t, std::int64_t> linear_start_delta() const;
 
             /**
+             * Calculates the size of a sample, if fixed and if the data type is one recognized by
+             * the WebSocket Streaming Protocol specification.
+             *
+             * @return The size of a single sample of this signal, in bytes. The return value is
+             *     zero if the signal is not explicit-rule, or if the data type is unknown or
+             *     user-defined.
+             */
+            std::size_t sample_size() const;
+
+            /**
              * Gets the global identifier of the associated domain signal, if any.
              *
              * @return The global identifier of the associated domain signal, or an empty string
              *     if no associated domain signal is specified in the signal's metadata.
              */
             std::string table_id() const;
+
+            /**
+             * Gets the "value index," or the sample count at which the last-transmitted
+             * linear-rule value applies.
+             *
+             * @return The metadata's value index, or std::nullopt if not specified.
+             */
+            std::optional<std::int64_t> value_index() const;
 
             /**
              * Gets a reference to the underlying JSON object containing the signal metadata.

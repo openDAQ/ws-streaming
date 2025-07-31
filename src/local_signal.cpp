@@ -10,8 +10,8 @@ wss::local_signal::local_signal(
         const std::string& id,
         const wss::metadata& metadata)
     : _id{id}
-    , _metadata{metadata}
 {
+    set_metadata(metadata);
 }
 
 void wss::local_signal::set_metadata(const wss::metadata& metadata)

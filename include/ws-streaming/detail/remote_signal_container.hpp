@@ -27,6 +27,7 @@ namespace wss::detail
                 std::shared_ptr<detail::remote_signal_impl> signal;
                 boost::signals2::scoped_connection on_subscribe_requested;
                 boost::signals2::scoped_connection on_unsubscribe_requested;
+                boost::signals2::scoped_connection on_signal_sought;
             };
 
         protected:
@@ -69,7 +70,7 @@ namespace wss::detail
 
                 auto signal = it->second.signal;
                 _signals_by_id.erase(it);
-                _signals_by_signo.erase(signal->signo());
+                _signals_by_signo.erase(signal->remote_signal::signo());
 
                 return signal;
             }
@@ -77,12 +78,12 @@ namespace wss::detail
             void set_remote_signal_signo(remote_signal_entry *entry, unsigned signo)
             {
                 _signals_by_signo[signo] = entry;
+                entry->signal->signo(signo);
             }
 
         private:
 
             std::map<std::string, remote_signal_entry> _signals_by_id;
             std::map<unsigned, remote_signal_entry *> _signals_by_signo;
-
     };
 }

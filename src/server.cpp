@@ -1,6 +1,5 @@
 #include <algorithm>
 #include <functional>
-#include <iostream>
 #include <memory>
 #include <utility>
 
@@ -34,8 +33,6 @@ void wss::server::run()
 
 void wss::server::stop()
 {
-    std::cout << "server::stop() in" << std::endl;
-
     for (const auto& listener : _listeners)
         listener.l->stop();
     _listeners.clear();
@@ -47,8 +44,6 @@ void wss::server::stop()
     for (const auto& session : _sessions)
         session.client->stop();
     _sessions.clear();
-
-    std::cout << "server::stop() out" << std::endl;
 }
 
 void wss::server::add_signal(local_signal& signal)
@@ -87,7 +82,6 @@ void wss::server::on_listener_accept(
     if (!socket.is_open())
         return;
 
-    std::cout << "accepted connection" << std::endl;
     auto client = std::make_shared<detail::http_client_servicer>(std::move(socket));
     _sessions.emplace_back(
         client,
@@ -102,7 +96,6 @@ nlohmann::json wss::server::on_servicer_command_interface_request(
     const std::shared_ptr<detail::http_client_servicer>& servicer,
     const nlohmann::json& request)
 {
-    std::cout << "command interface request: " << request.dump() << std::endl;
     return nlohmann::json::object();    
 }
 
@@ -110,8 +103,6 @@ void wss::server::on_servicer_websocket_upgrade(
     const std::shared_ptr<detail::http_client_servicer>& servicer,
     boost::asio::ip::tcp::socket& socket)
 {
-    std::cout << "websocket connection!" << std::endl;
-
     auto connection = std::make_shared<wss::connection>(
         socket.remote_endpoint().address().to_string(),
         std::move(socket),
@@ -135,8 +126,6 @@ void wss::server::on_servicer_closed(
     const std::shared_ptr<detail::http_client_servicer>& servicer,
     const boost::system::error_code& ec)
 {
-    std::cout << "server removing servicer from list (disconnect ec " << ec << ')' << std::endl;
-
     _sessions.remove_if([&](const client_entry& entry)
     {
         return entry.client == servicer;
@@ -146,8 +135,6 @@ void wss::server::on_servicer_closed(
 void wss::server::on_connection_disconnected(
     const std::shared_ptr<wss::connection>& connection)
 {
-    std::cout << "server removing peer from list" << std::endl;
-
     _clients.remove_if([&](const connected_client& client)
     {
         return client.connection == connection;

@@ -2,12 +2,12 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
-#include <iostream>
 #include <map>
 #include <string>
 #include <utility>
 
 #include <boost/asio/ip/tcp.hpp>
+#include <boost/endian/conversion.hpp>
 
 #include <ws-streaming/connection.hpp>
 #include <ws-streaming/metadata.hpp>
@@ -17,6 +17,7 @@
 #include <ws-streaming/detail/peer.hpp>
 #include <ws-streaming/detail/remote_signal_impl.hpp>
 #include <ws-streaming/detail/semver.hpp>
+#include <ws-streaming/detail/streaming_protocol.hpp>
 
 using namespace std::placeholders;
 
@@ -130,8 +131,6 @@ void wss::connection::on_peer_metadata_received(
     const std::string& method,
     const nlohmann::json& params)
 {
-    std::cout << "(connection) metadata (" << signo << ") " << method << ": " << params.dump() << std::endl;
-
     if (method == "subscribe")
         handle_subscribe(signo, params);
     else if (method == "unsubscribe")
@@ -167,7 +166,7 @@ void wss::connection::on_peer_closed(
 
     clear_local_signals();
 
-    on_disconnected();
+    on_disconnected(ec);
 }
 
 void wss::connection::on_local_signal_metadata_changed(
@@ -190,17 +189,18 @@ void wss::connection::on_local_signal_data_published(
         if (domain_signal)
         {
             std::int64_t new_linear_value = domain_value - (signal.signal.sample_index() - domain_signal->signal.sample_index()) * domain_signal->signal.linear_start_delta().second;
- 
+
             if (domain_signal->linear_value != new_linear_value)
             {
                 domain_signal->linear_value = new_linear_value;
+                detail::streaming_protocol::linear_payload payload;
 
-                std::int64_t x[2];
-                x[0] = signal.signal.sample_index();
-                x[1] = domain_value;
+                payload.sample_index = boost::endian::native_to_little(signal.signal.sample_index());
+                payload.value = boost::endian::native_to_little(domain_value);
+
                 _peer->send_data(
                     domain_signal->signo,
-                    boost::asio::const_buffer{x, sizeof(x)});
+                    boost::asio::const_buffer{&payload, sizeof(payload)});
             }
         }
     }
@@ -213,29 +213,36 @@ void wss::connection::on_local_signal_data_published(
 void wss::connection::on_signal_subscribe_requested(
     const std::string& signal_id)
 {
-    std::cout << "someone requested signal subscribe to " << signal_id << std::endl;
     if (!_command_interface_client)
         return; // @todo XXX TODO
 
     _command_interface_client->async_request(_remote_stream_id + ".subscribe", { signal_id },
         [](const boost::system::error_code& ec, const nlohmann::json& response)
         {
-            std::cout << "subscribe command interface request done: " << ec << " " << response.dump() << std::endl;
         });
 }
 
 void wss::connection::on_signal_unsubscribe_requested(
     const std::string& signal_id)
 {
-    std::cout << "someone requested signal unsubscribe from " << signal_id << std::endl;
     if (!_command_interface_client)
         return; // @todo XXX TODO
 
     _command_interface_client->async_request(_remote_stream_id + ".unsubscribe", { signal_id },
         [](const boost::system::error_code& ec, const nlohmann::json& response)
         {
-            std::cout << "unsubscribe command interface request done: " << ec << " " << response.dump() << std::endl;
         });
+}
+
+std::shared_ptr<wss::detail::remote_signal_impl>
+wss::connection::on_signal_sought(
+    const std::string& signal_id)
+{
+    auto signal = find_remote_signal(signal_id);
+    if (signal)
+        return signal->signal;
+
+    return nullptr;
 }
 
 void wss::connection::dispatch_metadata(
@@ -296,6 +303,9 @@ void wss::connection::handle_available(
 
         signal.on_unsubscribe_requested = signal.signal->on_unsubscribe_requested.connect(
             std::bind(&connection::on_signal_unsubscribe_requested, this, id));
+
+        signal.on_signal_sought = signal.signal->on_signal_sought.connect(
+            std::bind(&connection::on_signal_sought, this, _1));
 
         on_available(signal.signal);
     }

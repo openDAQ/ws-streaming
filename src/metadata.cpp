@@ -1,8 +1,11 @@
+#include <cstdint>
+#include <optional>
 #include <string>
 #include <utility>
 
 #include <nlohmann/json.hpp>
 
+#include <ws-streaming/data_types.hpp>
 #include <ws-streaming/metadata.hpp>
 
 wss::metadata::metadata()
@@ -60,6 +63,33 @@ std::pair<std::int64_t, std::int64_t> wss::metadata::linear_start_delta() const
     return std::make_pair(0, 0);
 }
 
+std::size_t wss::metadata::sample_size() const
+{
+    std::string type = data_type();
+    if (type == data_types::int8)
+        return sizeof(std::int8_t);
+    if (type == data_types::int16)
+        return sizeof(std::int16_t);
+    if (type == data_types::int32)
+        return sizeof(std::int32_t);
+    if (type == data_types::int64)
+        return sizeof(std::int64_t);
+    if (type == data_types::uint8)
+        return sizeof(std::uint8_t);
+    if (type == data_types::uint16)
+        return sizeof(std::uint16_t);
+    if (type == data_types::uint32)
+        return sizeof(std::uint32_t);
+    if (type == data_types::uint64)
+        return sizeof(std::uint64_t);
+    if (type == data_types::real32)
+        return 4;
+    if (type == data_types::real64)
+        return 8;
+
+    return 0;
+}
+
 std::string wss::metadata::table_id() const
 {
     if (auto table_id = _json.value<nlohmann::json>(
@@ -67,6 +97,15 @@ std::string wss::metadata::table_id() const
         return table_id;
 
     return "";
+}
+
+std::optional<std::int64_t> wss::metadata::value_index() const
+{
+    if (auto value_index = _json.value<nlohmann::json>(
+            "valueIndex", nullptr); value_index.is_number_integer())
+        return value_index;
+
+    return std::nullopt;
 }
 
 const nlohmann::json& wss::metadata::json() const noexcept

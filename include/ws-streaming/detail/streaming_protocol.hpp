@@ -35,6 +35,19 @@ namespace wss::detail
             constexpr unsigned MSGPACK = 2;     /**< Specifies that the metadata is MessagePack-encoded. */
         }
 
+#pragma pack(push, 1)
+        /**
+         * The structure of a WebSocket Streaming Protocol linear-rule signal data packet on the
+         * wire. Such a packet contains the index of the sample to which a new linear value
+         * applies.
+         */
+        struct linear_payload
+        {
+            std::int64_t sample_index;  /**< The index of the sample to which the value applies. */
+            std::int64_t value;         /**< The value associated with the specified sample. */
+        };
+#pragma pack(pop)
+
         /**
          * Populates a WebSocket Streaming Protocol packet header.
          *

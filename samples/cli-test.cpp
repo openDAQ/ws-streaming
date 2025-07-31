@@ -91,7 +91,7 @@ int main(int argc, char *argv[])
                     std::cout << "unavailable: " << signal->id() << std::endl;
                 });
 
-                connection->on_disconnected.connect([]()
+                connection->on_disconnected.connect([](const boost::system::error_code& ec)
                 {
                     std::cout << "disconnected" << std::endl;
                 });

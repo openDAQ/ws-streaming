@@ -1,6 +1,7 @@
 // This example demonstrates how to implement a TCP client which acts as a data sink. It
 // subscribes to the signal "/Value", and prints messages to the console when data packets are
 // received. The "server-source" sample provides a suitable server for this demo to connect to.
+// Press Ctrl+C to gracefully shut down the client.
 
 #include <cstddef>
 #include <cstdint>
@@ -17,20 +18,25 @@
 using namespace std::placeholders;
 
 void on_disconnected(
-    std::shared_ptr<wss::connection> connection,
     std::shared_ptr<boost::asio::signal_set> signal_handler,
-    const boost::signals2::connection& slot_connection)
+    const boost::signals2::connection& slot_connection,
+    const boost::system::error_code& ec)
 {
     slot_connection.disconnect();
+
+    std::cout << "connection closed (error code: " << ec << ')' << std::endl;
 }
 
 void on_data_received(std::int64_t domain_value, const void *data, std::size_t size)
 {
-    std::cout << "data received: domain=" << domain_value << std::endl;
+    std::cout << "received " << size << " data byte(s) with domain value " << domain_value << std::endl;
 }
 
 void on_available(const std::shared_ptr<wss::remote_signal>& signal)
 {
+    std::cout << "available signal: " << signal->id() << std::endl;
+
+    // Subscribe to the signal with ID "/Value".
     if (signal->id() == "/Value")
     {
         signal->on_data_received.connect(on_data_received);
@@ -50,32 +56,38 @@ void on_connected(
 
     // Set up a signal handler to stop the connection attempt when Ctrl+C is pressed.
     auto signal_handler = std::make_shared<boost::asio::signal_set>(connection->get_executor(), SIGINT);
-    std::cout << "setting up signal handler" << std::endl;
     signal_handler->async_wait([connection](const boost::system::error_code& ec, int signal)
     {
-        std::cout << "signal_handler " << ec << std::endl;
         if (!ec)
             connection->stop();
     });
 
+    // We wish to keep the Ctrl+C signal handler active until the connection is closed. To do
+    // this, we store a shared_ptr for it in the Boost.Signals2 slot connection for
+    // on_disconnected, which, when called, will disconnect itself and thereby destroy the signal
+    // handler.
     connection->on_disconnected.connect_extended(
         decltype(connection->on_disconnected)::extended_slot_type{
             &on_disconnected,
-            connection,
             signal_handler,
-            _1});
+            _1,
+            _2});
 
+    // Call on_available when any signal becomes available from the server.
     connection->on_available.connect(on_available);
 }
 
 int main(int argc, char *argv[])
 {
+    // Allow the hostname/IP to be specified as the first argument, defaulting to "localhost."
     std::string hostname = "localhost";
     if (argc >= 2)
         hostname = argv[1];
 
+    // Set up a single-threaded Boost.Asio execution context.
     boost::asio::io_context ioc{1};
 
+    // Try to connect to the server; on_connected() will be called on success/failure.
     std::make_shared<wss::client>(ioc.get_executor())
         ->async_connect(
             "ws://" + hostname + ":7414",
