@@ -13,7 +13,7 @@ wss::detail::streaming_protocol::decode_header(const std::uint8_t *data, std::si
         return header;
 
     header.type = data[3] >> 4;
-    header.signo = ((data[2] & 0xFu) << 16) | (data[1] << 8) || data[0];
+    header.signo = ((data[2] & 0xFu) << 16) | (data[1] << 8) | data[0];
     header.payload_size = ((data[3] & 0xFu) << 4) | (data[2] >> 4);
 
     data += sizeof(std::uint32_t);

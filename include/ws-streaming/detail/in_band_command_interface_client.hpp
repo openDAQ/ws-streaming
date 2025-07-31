@@ -10,7 +10,7 @@
 #include <nlohmann/json.hpp>
 
 #include <ws-streaming/detail/command_interface_client.hpp>
-#include <ws-streaming/transport/peer.hpp>
+#include <ws-streaming/detail/peer.hpp>
 
 namespace wss::detail
 {
@@ -20,7 +20,7 @@ namespace wss::detail
         public:
 
             in_band_command_interface_client(
-                std::shared_ptr<transport::peer> peer);
+                std::shared_ptr<peer> peer);
 
             void async_request(
                 const std::string& method,
@@ -37,7 +37,7 @@ namespace wss::detail
 
         private:
 
-            std::shared_ptr<transport::peer> _peer;
+            std::shared_ptr<peer> _peer;
             unsigned _next_id = 1;
 
             std::map<unsigned, std::function<

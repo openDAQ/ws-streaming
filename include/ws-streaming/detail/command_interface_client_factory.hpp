@@ -5,7 +5,7 @@
 #include <nlohmann/json.hpp>
 
 #include <ws-streaming/detail/command_interface_client.hpp>
-#include <ws-streaming/transport/peer.hpp>
+#include <ws-streaming/detail/peer.hpp>
 
 namespace wss::detail
 {
@@ -15,6 +15,6 @@ namespace wss::detail
         std::unique_ptr<command_interface_client>
         create_client(
             const nlohmann::json& interfaces,
-            const std::shared_ptr<transport::peer>& peer);
+            const std::shared_ptr<peer>& peer);
     };
 }

@@ -9,7 +9,7 @@
 #include <boost/signals2/signal.hpp>
 #include <boost/system/error_code.hpp>
 
-namespace wss::transport
+namespace wss
 {
     /**
      * Asynchronously listens for incoming socket connections, and notifies the caller by raising

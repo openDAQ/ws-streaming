@@ -21,7 +21,7 @@
 #include <ws-streaming/detail/streaming_protocol.hpp>
 #include <ws-streaming/detail/websocket_protocol.hpp>
 
-namespace wss::transport
+namespace wss::detail
 {
     /**
      * Implements the transport layer of a WebSocket Streaming Protocol connection to a remote

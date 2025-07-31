@@ -11,15 +11,19 @@
 int main(int argc, char *argv[])
 {
     boost::asio::io_context ioc(1);
+    std::shared_ptr<wss::remote_signal> subscribed_signal1;
+    std::shared_ptr<wss::remote_signal> subscribed_signal2;
 
     auto c = std::make_shared<wss::client>(ioc.get_executor());
 
     for (unsigned i = 0; i < 1; ++i)
     {
         std::shared_ptr<wss::connection> conn;
-        unsigned subscribed = 0;
 
         boost::asio::deadline_timer t(ioc);
+        boost::asio::deadline_timer t2(ioc);
+        boost::asio::deadline_timer t3(ioc);
+        boost::asio::deadline_timer t4(ioc);
 
         c->async_connect(
             "ws://localhost:7414",
@@ -29,6 +33,9 @@ int main(int argc, char *argv[])
                 {
                     std::cout << "connect error: " << ec << std::endl;
                     t.cancel();
+                    t2.cancel();
+                    t3.cancel();
+                    t4.cancel();
                     return;
                 }
 
@@ -64,11 +71,17 @@ int main(int argc, char *argv[])
                         std::cout << "signal unavailable" << std::endl;
                     });
 
-                    if (subscribed == 0 || subscribed == 2)
+                    if (signal->id() == "/Value1")
                     {
                         signal->subscribe();
+                        subscribed_signal1 = signal;
                     }
-                    ++subscribed;
+
+                    if (signal->id() == "/Value2")
+                    {
+                        signal->subscribe();
+                        subscribed_signal2 = signal;
+                    }
                 });
 
                 connection->on_unavailable.connect([](const std::shared_ptr<wss::remote_signal>& signal)
@@ -82,7 +95,7 @@ int main(int argc, char *argv[])
                 });
             });
 
-        t.expires_from_now(boost::posix_time::seconds(5));
+        t.expires_from_now(boost::posix_time::seconds(10));
         t.async_wait([&](const boost::system::error_code& ec)
         {
             if (ec)
@@ -93,6 +106,47 @@ int main(int argc, char *argv[])
                 conn->stop();
             else
                 c->cancel();
+        });
+
+        t2.expires_from_now(boost::posix_time::seconds(3));
+        t2.async_wait([&](const boost::system::error_code& ec)
+        {
+            if (ec)
+                return;
+            std::cout << "timer 2 fired" << std::endl;
+            std::cout << "unsubscribing" << std::endl;
+            if (subscribed_signal1)
+                subscribed_signal1->unsubscribe();
+//            if (subscribed_signal2)
+//                subscribed_signal2->unsubscribe();
+        });
+
+        t3.expires_from_now(boost::posix_time::seconds(6));
+        t3.async_wait([&](const boost::system::error_code& ec)
+        {
+            if (ec)
+                return;
+            std::cout << "timer 3 fired" << std::endl;
+            std::cout << "subscribing" << std::endl;
+            if (subscribed_signal1)
+                subscribed_signal1->subscribe();
+//            if (subscribed_signal2)
+//                subscribed_signal2->subscribe();
+        });
+
+        t4.expires_from_now(boost::posix_time::seconds(9));
+        t4.async_wait([&](const boost::system::error_code& ec)
+        {
+            if (ec)
+                return;
+            std::cout << "timer 4 fired" << std::endl;
+            std::cout << "unsubscribing" << std::endl;
+            if (subscribed_signal1)
+                subscribed_signal1->unsubscribe();
+            if (subscribed_signal2)
+                subscribed_signal2->unsubscribe();
+            subscribed_signal1.reset();
+            subscribed_signal2.reset();
         });
 
         std::cout << "calling ioc.run()" << std::endl;

@@ -4,25 +4,27 @@
 #include <memory>
 #include <utility>
 
-#include <boost/asio.hpp>
+#include <boost/asio/any_io_executor.hpp>
+#include <boost/asio/ip/tcp.hpp>
+#include <boost/system/error_code.hpp>
 
 #include <nlohmann/json.hpp>
 
 #include <ws-streaming/connection.hpp>
+#include <ws-streaming/server.hpp>
+#include <ws-streaming/detail/http_client_servicer.hpp>
 #include <ws-streaming/detail/streaming_protocol.hpp>
-#include <ws-streaming/transport/http_client_servicer.hpp>
-#include <ws-streaming/transport/server.hpp>
 
 using namespace std::placeholders;
 
-wss::transport::server::server(boost::asio::any_io_executor executor)
+wss::server::server(boost::asio::any_io_executor executor)
     : _executor(executor)
 {
     add_listener(detail::streaming_protocol::DEFAULT_WEBSOCKET_PORT);
     add_listener(detail::streaming_protocol::DEFAULT_COMMAND_INTERFACE_PORT);
 }
 
-void wss::transport::server::run()
+void wss::server::run()
 {
     for (const auto& listener : _listeners)
     {
@@ -30,7 +32,7 @@ void wss::transport::server::run()
     }
 }
 
-void wss::transport::server::stop()
+void wss::server::stop()
 {
     for (const auto& listener : _listeners)
         listener.l->stop();
@@ -45,21 +47,21 @@ void wss::transport::server::stop()
     _sessions.clear();
 }
 
-void wss::transport::server::add_signal(local_signal& signal)
+void wss::server::add_signal(local_signal& signal)
 {
     if (_signals.emplace(&signal).second)
         for (const auto& c : _clients)
             c.connection->add_signal(signal);
 }
 
-void wss::transport::server::remove_signal(local_signal& signal)
+void wss::server::remove_signal(local_signal& signal)
 {
     if (_signals.erase(&signal))
         for (const auto& c : _clients)
             c.connection->remove_signal(signal);
 }
 
-void wss::transport::server::add_listener(std::uint16_t port)
+void wss::server::add_listener(std::uint16_t port)
 {
     add_listener(
         std::make_shared<listener<>>(
@@ -67,7 +69,7 @@ void wss::transport::server::add_listener(std::uint16_t port)
             boost::asio::ip::tcp::endpoint({}, port)));
 }
 
-void wss::transport::server::add_listener(
+void wss::server::add_listener(
     std::shared_ptr<listener<>> listener)
 {
     _listeners.emplace_back(
@@ -75,14 +77,14 @@ void wss::transport::server::add_listener(
         listener->on_accept.connect(std::bind(&server::on_listener_accept, this, _1)));
 }
 
-void wss::transport::server::on_listener_accept(
+void wss::server::on_listener_accept(
     boost::asio::ip::tcp::socket& socket)
 {
     if (!socket.is_open())
         return;
 
     std::cout << "accepted connection" << std::endl;
-    auto client = std::make_shared<http_client_servicer>(std::move(socket));
+    auto client = std::make_shared<detail::http_client_servicer>(std::move(socket));
     _sessions.emplace_back(
         client,
         client->on_command_interface_request.connect(std::bind(&server::on_servicer_command_interface_request, this, client, _1)),
@@ -92,16 +94,16 @@ void wss::transport::server::on_listener_accept(
     client->run();
 }
 
-nlohmann::json wss::transport::server::on_servicer_command_interface_request(
-    const std::shared_ptr<http_client_servicer>& servicer,
+nlohmann::json wss::server::on_servicer_command_interface_request(
+    const std::shared_ptr<detail::http_client_servicer>& servicer,
     const nlohmann::json& request)
 {
     std::cout << "command interface request: " << request.dump() << std::endl;
     return nlohmann::json::object();    
 }
 
-void wss::transport::server::on_servicer_websocket_upgrade(
-    const std::shared_ptr<http_client_servicer>& servicer,
+void wss::server::on_servicer_websocket_upgrade(
+    const std::shared_ptr<detail::http_client_servicer>& servicer,
     boost::asio::ip::tcp::socket& socket)
 {
     std::cout << "websocket connection!" << std::endl;
@@ -125,8 +127,8 @@ void wss::transport::server::on_servicer_websocket_upgrade(
     connection->run();
 }
 
-void wss::transport::server::on_servicer_closed(
-    const std::shared_ptr<http_client_servicer>& servicer,
+void wss::server::on_servicer_closed(
+    const std::shared_ptr<detail::http_client_servicer>& servicer,
     const boost::system::error_code& ec)
 {
     std::cout << "server removing servicer from list (disconnect ec " << ec << ')' << std::endl;
@@ -137,7 +139,7 @@ void wss::transport::server::on_servicer_closed(
     });
 }
 
-void wss::transport::server::on_connection_disconnected(
+void wss::server::on_connection_disconnected(
     const std::shared_ptr<wss::connection>& connection)
 {
     std::cout << "server removing peer from list" << std::endl;

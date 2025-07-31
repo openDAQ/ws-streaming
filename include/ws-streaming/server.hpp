@@ -10,11 +10,11 @@
 #include <nlohmann/json.hpp>
 
 #include <ws-streaming/connection.hpp>
+#include <ws-streaming/listener.hpp>
 #include <ws-streaming/local_signal.hpp>
-#include <ws-streaming/transport/http_client_servicer.hpp>
-#include <ws-streaming/transport/listener.hpp>
+#include <ws-streaming/detail/http_client_servicer.hpp>
 
-namespace wss::transport
+namespace wss
 {
     class server
     {
@@ -38,9 +38,9 @@ namespace wss::transport
             void add_listener(std::shared_ptr<listener<>> listener);
 
             void on_listener_accept(boost::asio::ip::tcp::socket& socket);
-            nlohmann::json on_servicer_command_interface_request(const std::shared_ptr<http_client_servicer>& servicer, const nlohmann::json& request);
-            void on_servicer_websocket_upgrade(const std::shared_ptr<http_client_servicer>& servicer, boost::asio::ip::tcp::socket& socket);
-            void on_servicer_closed(const std::shared_ptr<http_client_servicer>& servicer, const boost::system::error_code& ec);
+            nlohmann::json on_servicer_command_interface_request(const std::shared_ptr<detail::http_client_servicer>& servicer, const nlohmann::json& request);
+            void on_servicer_websocket_upgrade(const std::shared_ptr<detail::http_client_servicer>& servicer, boost::asio::ip::tcp::socket& socket);
+            void on_servicer_closed(const std::shared_ptr<detail::http_client_servicer>& servicer, const boost::system::error_code& ec);
             void on_connection_disconnected(const std::shared_ptr<wss::connection>& connection);
 
             struct listener_entry
@@ -60,7 +60,7 @@ namespace wss::transport
             struct client_entry
             {
                 client_entry(
-                        std::shared_ptr<http_client_servicer> client,
+                        std::shared_ptr<detail::http_client_servicer> client,
                         boost::signals2::scoped_connection on_websocket_upgrade,
                         boost::signals2::scoped_connection on_command_interface_request,
                         boost::signals2::scoped_connection on_closed)
@@ -71,7 +71,7 @@ namespace wss::transport
                 {
                 }
 
-                std::shared_ptr<http_client_servicer> client;
+                std::shared_ptr<detail::http_client_servicer> client;
                 boost::signals2::scoped_connection on_websocket_upgrade;
                 boost::signals2::scoped_connection on_command_interface_request;
                 boost::signals2::scoped_connection on_closed;

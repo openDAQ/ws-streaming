@@ -14,10 +14,12 @@
 #include <nlohmann/json.hpp>
 
 #include <ws-streaming/local_signal.hpp>
+#include <ws-streaming/metadata.hpp>
 #include <ws-streaming/remote_signal.hpp>
-#include <ws-streaming/transport/peer.hpp>
 #include <ws-streaming/detail/command_interface_client.hpp>
 #include <ws-streaming/detail/local_signal_container.hpp>
+#include <ws-streaming/detail/peer.hpp>
+#include <ws-streaming/detail/remote_signal_container.hpp>
 #include <ws-streaming/detail/remote_signal_impl.hpp>
 #include <ws-streaming/detail/semver.hpp>
 
@@ -26,6 +28,7 @@ namespace wss
     class connection
         : public std::enable_shared_from_this<connection>
         , detail::local_signal_container
+        , detail::remote_signal_container
     {
         public:
 
@@ -75,10 +78,12 @@ namespace wss
 
             void on_local_signal_metadata_changed(
                 unsigned signo,
-                const nlohmann::json& metadata);
+                const wss::metadata& metadata);
 
-            void on_local_signal_data(
-                unsigned signo,
+            void on_local_signal_data_published(
+                detail::local_signal_container::local_signal_entry& signal,
+                std::int64_t domain_value,
+                std::size_t sample_count,
                 const void *data,
                 std::size_t size);
 
@@ -103,38 +108,14 @@ namespace wss
             nlohmann::json do_command_interface_subscribe(const nlohmann::json& params);
             nlohmann::json do_command_interface_unsubscribe(const nlohmann::json& params);
 
+            bool subscribe(const std::string& signal_id, bool is_explicit);
+            bool unsubscribe(const std::string& signal_id, bool is_explicit);
+
         private:
-
-            struct signal_entry
-            {
-                signal_entry(const std::string& id)
-                    : signal(std::make_shared<detail::remote_signal_impl>(id))
-                {
-                }
-
-                std::shared_ptr<detail::remote_signal_impl> signal;
-                boost::signals2::scoped_connection on_subscribe_requested;
-                boost::signals2::scoped_connection on_unsubscribe_requested;
-            };
-
-            struct local_signal_entry
-            {
-                local_signal_entry(local_signal& signal)
-                    : signal(signal)
-                {
-                }
-
-                local_signal& signal;
-                bool is_subscribed = false;
-                boost::signals2::scoped_connection on_metadata_changed;
-                boost::signals2::scoped_connection on_data;
-            };
 
             std::string _hostname;
             bool _is_client;
-            std::shared_ptr<transport::peer> _peer;
-            std::map<std::string, signal_entry> _remote_signals_by_id;
-            std::map<unsigned, signal_entry *> _remote_signals_by_signo;
+            std::shared_ptr<detail::peer> _peer;
 
             detail::semver _api_version;
             std::string _remote_stream_id;
@@ -144,5 +125,7 @@ namespace wss
             boost::signals2::scoped_connection _on_peer_data_received;
             boost::signals2::scoped_connection _on_peer_metadata_received;
             boost::signals2::scoped_connection _on_peer_closed;
+
+            bool _hello_sent = false;
     };
 }

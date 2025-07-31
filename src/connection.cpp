@@ -10,12 +10,13 @@
 #include <boost/asio/ip/tcp.hpp>
 
 #include <ws-streaming/connection.hpp>
+#include <ws-streaming/metadata.hpp>
 #include <ws-streaming/detail/command_interface_client_factory.hpp>
 #include <ws-streaming/detail/in_band_command_interface_client.hpp>
 #include <ws-streaming/detail/json_rpc_exception.hpp>
+#include <ws-streaming/detail/peer.hpp>
 #include <ws-streaming/detail/remote_signal_impl.hpp>
 #include <ws-streaming/detail/semver.hpp>
-#include <ws-streaming/transport/peer.hpp>
 
 using namespace std::placeholders;
 
@@ -25,7 +26,7 @@ wss::connection::connection(
         bool is_client)
     : _hostname{hostname}
     , _is_client{is_client}
-    , _peer{std::make_shared<transport::peer>(std::move(socket), is_client)}
+    , _peer{std::make_shared<detail::peer>(std::move(socket), is_client)}
     , _local_stream_id{_peer->socket().remote_endpoint().address().to_string()
         + ":" + std::to_string(_peer->socket().remote_endpoint().port())}
 {
@@ -59,8 +60,8 @@ void wss::connection::add_signal(local_signal& signal)
 {
     auto [signo, added] = add_local_signal(signal);
 
-    if (added)
-        _peer->send_metadata(signo, "available", { { "signalIds", { signal.id() } } });
+    if (added && _hello_sent)
+        _peer->send_metadata(0, "available", { { "signalIds", { signal.id() } } });
 }
 
 void wss::connection::remove_signal(local_signal& signal)
@@ -68,7 +69,7 @@ void wss::connection::remove_signal(local_signal& signal)
     unsigned signo = remove_local_signal(signal);
 
     if (signo)
-        _peer->send_metadata(signo, "unavailable", { { "signalIds", { signal.id() } } });
+        _peer->send_metadata(0, "unavailable", { { "signalIds", { signal.id() } } });
 }
 
 void wss::connection::do_hello()
@@ -100,6 +101,8 @@ void wss::connection::do_hello()
             {
                 { "signalIds", signal_ids }
             });
+
+    _hello_sent = true;
 }
 
 void wss::connection::on_peer_data_received(
@@ -107,11 +110,9 @@ void wss::connection::on_peer_data_received(
     const std::uint8_t *data,
     std::size_t size)
 {
-    auto it = _remote_signals_by_signo.find(signo);
-    if (it == _remote_signals_by_signo.end())
-        return;
-
-    it->second->signal->handle_data(data, size);
+    auto *signal = find_remote_signal(signo);
+    if (signal)
+        signal->signal->handle_data(data, size);
 }
 
 void wss::connection::on_peer_metadata_received(
@@ -150,15 +151,11 @@ void wss::connection::on_peer_closed(
     _on_peer_metadata_received.disconnect();
     _on_peer_closed.disconnect();
 
-    std::map<std::string, signal_entry> old_signals;
-    std::swap(old_signals, _remote_signals_by_id);
-    _remote_signals_by_signo.clear();
-
-    for (const auto& signal : old_signals)
-        signal.second.signal->detach();
-
-    for (const auto& signal : old_signals)
-        on_unavailable(signal.second.signal);
+    clear_remote_signals(
+        [this](const std::shared_ptr<detail::remote_signal_impl>& signal)
+        {
+            on_unavailable(signal);
+        });
 
     clear_local_signals();
 
@@ -167,20 +164,48 @@ void wss::connection::on_peer_closed(
 
 void wss::connection::on_local_signal_metadata_changed(
     unsigned signo,
-    const nlohmann::json& metadata)
+    const wss::metadata& metadata)
 {
     std::cout << "on_local_signal_metadata_changed" << std::endl;
-    _peer->send_metadata(signo, "signal", metadata);
+    _peer->send_metadata(signo, "signal", metadata.json());
 }
 
-void wss::connection::on_local_signal_data(
-    unsigned signo,
+void wss::connection::on_local_signal_data_published(
+    detail::local_signal_container::local_signal_entry& signal,
+    std::int64_t domain_value,
+    std::size_t sample_count,
     const void *data,
     std::size_t size)
 {
-    std::cout << "on_local_signal_data" << std::endl;
+    std::cout << "on_local_signal_data(" << domain_value << ", " << sample_count << ", ...)" << std::endl;
+
+    if (sample_count)
+    {
+        std::cout << "looking for domain signal" << std::endl;
+        auto *domain_signal = find_local_signal(signal.signal.table_id());
+
+        if (domain_signal)
+        {
+            std::int64_t new_linear_value = domain_value - (signal.signal.sample_index() - domain_signal->signal.sample_index()) * domain_signal->signal.linear_start_delta().second;
+            std::cout << "have domain signal; new linear value is " << new_linear_value << " = " << domain_value << " - (" << signal.signal.sample_index() << " - " << domain_signal->signal.sample_index() << ") * " << domain_signal->signal.linear_start_delta().second << std::endl;
+
+            if (domain_signal->linear_value != new_linear_value)
+            {
+                std::cout << domain_signal->linear_value << " != " << new_linear_value << "; sending {" << signal.signal.sample_index() << ", " << domain_value << "}" << std::endl;
+                domain_signal->linear_value = new_linear_value;
+
+                std::int64_t x[2];
+                x[0] = signal.signal.sample_index();
+                x[1] = domain_value;
+                _peer->send_data(
+                    domain_signal->signo,
+                    boost::asio::const_buffer{x, sizeof(x)});
+            }
+        }
+    }
+
     _peer->send_data(
-        signo,
+        signal.signo,
         boost::asio::const_buffer{data, size});
 }
 
@@ -217,11 +242,10 @@ void wss::connection::dispatch_metadata(
     const std::string& method,
     const nlohmann::json& params)
 {
-    auto it = _remote_signals_by_signo.find(signo);
-    if (it == _remote_signals_by_signo.end())
-        return;
+    auto *signal = find_remote_signal(signo);
 
-    it->second->signal->handle_metadata(method, params);
+    if (signal)
+        signal->signal->handle_metadata(method, params);
 }
 
 void wss::connection::handle_api_version(
@@ -262,19 +286,17 @@ void wss::connection::handle_available(
         if (!id.is_string())
             continue;
 
-        auto it = _remote_signals_by_id.find(id);
-        if (it != _remote_signals_by_id.end())
+        auto [added, signal] = add_remote_signal(id);
+        if (!added)
             continue;
 
-        auto& entry = _remote_signals_by_id.emplace(id, id).first->second;
-
-        entry.on_subscribe_requested = entry.signal->on_subscribe_requested.connect(
+        signal.on_subscribe_requested = signal.signal->on_subscribe_requested.connect(
             std::bind(&connection::on_signal_subscribe_requested, this, id));
 
-        entry.on_unsubscribe_requested = entry.signal->on_unsubscribe_requested.connect(
+        signal.on_unsubscribe_requested = signal.signal->on_unsubscribe_requested.connect(
             std::bind(&connection::on_signal_unsubscribe_requested, this, id));
 
-        on_available(entry.signal);
+        on_available(signal.signal);
     }
 }
 
@@ -287,13 +309,12 @@ void wss::connection::handle_subscribe(
             || !params["signalId"].is_string())
         return;
 
-    auto it = _remote_signals_by_id.find(params["signalId"]);
-    if (it == _remote_signals_by_id.end())
+    auto *signal = find_remote_signal(static_cast<std::string>(params["signalId"]));
+    if (!signal)
         return;
 
-    _remote_signals_by_signo[signo] = &it->second;
-
-    dispatch_metadata(signo, "subscribe", params);
+    set_remote_signal_signo(signal, signo);
+    signal->signal->handle_metadata("subscribe", params);
 }
 
 void wss::connection::handle_unsubscribe(
@@ -301,8 +322,7 @@ void wss::connection::handle_unsubscribe(
     const nlohmann::json& params)
 {
     dispatch_metadata(signo, "unsubscribe", params);
-
-    _remote_signals_by_signo.erase(signo);
+    forget_remote_signo(signo);
 }
 
 void wss::connection::handle_unavailable(
@@ -318,16 +338,12 @@ void wss::connection::handle_unavailable(
         if (!id.is_string())
             continue;
 
-        auto it = _remote_signals_by_id.find(id);
-        if (it == _remote_signals_by_id.end())
-            continue;
-
-        auto signal = it->second.signal;
-        _remote_signals_by_id.erase(it);
-        _remote_signals_by_signo.erase(signal->signo());
-
-        signal->detach();
-        on_unavailable(signal);
+        auto signal = remove_remote_signal(id);
+        if (signal)
+        {
+            signal->detach();
+            on_unavailable(signal);
+        }
     }
 }
 
@@ -382,47 +398,9 @@ void wss::connection::handle_command_interface_request(const nlohmann::json& par
 
 nlohmann::json wss::connection::do_command_interface_subscribe(const nlohmann::json& params)
 {
-    auto subscribe = [&](const std::string& signal_id)
-    {
-        auto *signal = find_local_signal(signal_id);
-        if (!signal || signal->is_subscribed)
-            return false;
-
-        signal->is_subscribed = true;
-
-        signal->on_data = signal->signal.on_data.connect(
-            std::bind(
-                &connection::on_local_signal_data,
-                shared_from_this(),
-                signal->signo,
-                _1,
-                _2));
-
-        signal->on_metadata_changed = signal->signal.on_metadata_changed.connect(
-            std::bind(
-                &connection::on_local_signal_metadata_changed,
-                shared_from_this(),
-                signal->signo,
-                _1));
-
-        _peer->send_metadata(
-            signal->signo,
-            "subscribe",
-            {
-                { "signalId", signal->signal.id() }
-            });
-
-        _peer->send_metadata(
-            signal->signo,
-            "signal",
-            signal->signal.metadata());
-
-        return true;
-    };
-
     if (params.is_string())
     {
-        if (!subscribe(params))
+        if (!subscribe(params, true))
             throw detail::json_rpc_exception(
                 detail::json_rpc_exception::server_error,
                 "failed to subscribe signal");
@@ -435,7 +413,7 @@ nlohmann::json wss::connection::do_command_interface_subscribe(const nlohmann::j
         auto results = nlohmann::json::array();
 
         for (const auto& signal_id : params)
-            results.push_back(signal_id.is_string() && subscribe(signal_id));
+            results.push_back(signal_id.is_string() && subscribe(signal_id, true));
 
         return results;
     }
@@ -448,22 +426,9 @@ nlohmann::json wss::connection::do_command_interface_subscribe(const nlohmann::j
 
 nlohmann::json wss::connection::do_command_interface_unsubscribe(const nlohmann::json& params)
 {
-    auto unsubscribe = [&](const std::string& signal_id)
-    {
-        auto *signal = find_local_signal(signal_id);
-        if (!signal || !signal->is_subscribed)
-            return false;
-
-        signal->is_subscribed = false;
-        signal->on_data.disconnect();
-        signal->on_metadata_changed.disconnect();
-
-        return true;
-    };
-
     if (params.is_string())
     {
-        if (!unsubscribe(params))
+        if (!unsubscribe(params, true))
             throw detail::json_rpc_exception(
                 detail::json_rpc_exception::server_error,
                 "failed to unsubscribe signal");
@@ -476,7 +441,7 @@ nlohmann::json wss::connection::do_command_interface_unsubscribe(const nlohmann:
         auto results = nlohmann::json::array();
 
         for (const auto& signal_id : params)
-            results.push_back(signal_id.is_string() && unsubscribe(signal_id));
+            results.push_back(signal_id.is_string() && unsubscribe(signal_id, true));
 
         return results;
     }
@@ -491,4 +456,106 @@ void wss::connection::handle_command_interface_response(const nlohmann::json& pa
 {
     if (auto *client = dynamic_cast<detail::in_band_command_interface_client *>(_command_interface_client.get()); client)
         client->handle_response(params);
+}
+
+bool wss::connection::subscribe(
+    const std::string& signal_id,
+    bool is_explicit)
+{
+    std::cout << "subscribe(" << signal_id << ", " << is_explicit << ")" << std::endl;
+    auto *signal = find_local_signal(signal_id);
+    if (!signal)
+        return false;
+
+    bool was_subscribed = signal->is_explicitly_subscribed || signal->implicit_subscribe_count > 0;
+
+    if (is_explicit)
+        signal->is_explicitly_subscribed = true;
+    else ++signal->implicit_subscribe_count;
+
+    if (was_subscribed)
+        return false;
+
+    if (is_explicit)
+    {
+        auto table_id = signal->signal.metadata().table_id();
+        std::cout << "table is '" << table_id << "'" << std::endl;
+        if (!table_id.empty() && table_id != signal_id)
+        {
+            std::cout << "doing implicit subscribe" << std::endl;
+            subscribe(table_id, false);
+        }
+    }
+
+    _peer->send_metadata(
+        signal->signo,
+        "subscribe",
+        {
+            { "signalId", signal->signal.id() }
+        });
+
+    std::cout << "initial sample count is " << signal->signal.sample_index() << std::endl;
+
+    nlohmann::json metadata = signal->signal.metadata().json();
+    metadata["valueIndex"] = signal->signal.sample_index();
+
+    _peer->send_metadata(
+        signal->signo,
+        "signal",
+        metadata);
+
+    std::cout << "subscribing to local_signal on_data" << std::endl;
+    signal->on_data_published = signal->signal.on_data_published.connect(
+        std::bind(
+            &connection::on_local_signal_data_published,
+            shared_from_this(),
+            std::ref(*signal),
+            _1,
+            _2,
+            _3,
+            _4));
+
+    std::cout << "subscribing to local_signal on_metadata" << std::endl;
+    signal->on_metadata_changed = signal->signal.on_metadata_changed.connect(
+        std::bind(
+            &connection::on_local_signal_metadata_changed,
+            shared_from_this(),
+            signal->signo,
+            _1));
+
+    return true;
+}
+
+bool wss::connection::unsubscribe(
+    const std::string& signal_id,
+    bool is_explicit)
+{
+    auto *signal = find_local_signal(signal_id);
+    if (!signal)
+        return false;
+
+    if (is_explicit)
+        signal->is_explicitly_subscribed = false;
+    else --signal->implicit_subscribe_count;
+
+    if (signal->is_explicitly_subscribed || signal->implicit_subscribe_count > 0)
+        return false;
+
+    std::cout << "unsubscribe: disconnecting on_data and on_metadata_changed" << std::endl;
+    signal->on_data_published.disconnect();
+    signal->on_metadata_changed.disconnect();
+    signal->linear_value = 0;
+
+    _peer->send_metadata(
+        signal->signo,
+        "unsubscribe",
+        {
+            { "signalId", signal->signal.id() }
+        });
+
+    auto table_id = signal->signal.metadata().table_id();
+    if (!table_id.empty() && table_id != signal_id)
+        unsubscribe(table_id, false);
+
+    return true;
 }

@@ -7,11 +7,11 @@
 
 #include <nlohmann/json.hpp>
 
-#include <ws-streaming/transport/peer.hpp>
 #include <ws-streaming/detail/in_band_command_interface_client.hpp>
+#include <ws-streaming/detail/peer.hpp>
 
 wss::detail::in_band_command_interface_client::in_band_command_interface_client(
-        std::shared_ptr<transport::peer> peer)
+        std::shared_ptr<peer> peer)
     : _peer(peer)
 {
 }

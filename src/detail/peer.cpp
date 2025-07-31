@@ -17,13 +17,13 @@
 
 #include <nlohmann/json.hpp>
 
+#include <ws-streaming/detail/peer.hpp>
 #include <ws-streaming/detail/streaming_protocol.hpp>
 #include <ws-streaming/detail/websocket_protocol.hpp>
-#include <ws-streaming/transport/peer.hpp>
 
 using namespace std::placeholders;
 
-wss::transport::peer::peer(
+wss::detail::peer::peer(
         boost::asio::ip::tcp::socket&& socket,
         bool is_client,
         std::size_t rx_buffer_size,
@@ -36,12 +36,12 @@ wss::transport::peer::peer(
     set_send_buffer_size(tx_buffer_size);
 }
 
-void wss::transport::peer::run()
+void wss::detail::peer::run()
 {
     do_wait_rx();
 }
 
-void wss::transport::peer::run(const void *data, std::size_t size)
+void wss::detail::peer::run(const void *data, std::size_t size)
 {
     if (size > _rx_buffer.size())
         boost::asio::post(
@@ -66,13 +66,13 @@ void wss::transport::peer::run(const void *data, std::size_t size)
         });
 }
 
-void wss::transport::peer::stop()
+void wss::detail::peer::stop()
 {
     boost::system::error_code ec;
     _socket.close(ec);
 }
 
-void wss::transport::peer::send_metadata(
+void wss::detail::peer::send_metadata(
     unsigned signo,
     const std::string& method,
     const nlohmann::json& params)
@@ -97,7 +97,7 @@ void wss::transport::peer::send_metadata(
         sizeof(encoding) + payload.size());
 }
 
-void wss::transport::peer::set_send_buffer_size(std::size_t size)
+void wss::detail::peer::set_send_buffer_size(std::size_t size)
 {
     // Clamp the requested tx buffer size to the largest value we can store in an int.
     if (size > std::numeric_limits<int>::max())
@@ -109,7 +109,7 @@ void wss::transport::peer::set_send_buffer_size(std::size_t size)
     _socket.set_option(option, ec);
 }
 
-void wss::transport::peer::do_wait_rx()
+void wss::detail::peer::do_wait_rx()
 {
     _socket.async_wait(
         boost::asio::socket_base::wait_read,
@@ -119,7 +119,7 @@ void wss::transport::peer::do_wait_rx()
             _1));
 }
 
-void wss::transport::peer::do_wait_tx()
+void wss::detail::peer::do_wait_tx()
 {
     _socket.async_wait(
         boost::asio::socket_base::wait_write,
@@ -131,7 +131,7 @@ void wss::transport::peer::do_wait_tx()
     _waiting_tx = true;
 }
 
-void wss::transport::peer::finish_wait_rx(const boost::system::error_code& wait_ec)
+void wss::detail::peer::finish_wait_rx(const boost::system::error_code& wait_ec)
 {
     boost::system::error_code receive_ec;
 
@@ -159,7 +159,7 @@ void wss::transport::peer::finish_wait_rx(const boost::system::error_code& wait_
     process_buffer();
 }
 
-void wss::transport::peer::finish_wait_tx(const boost::system::error_code& wait_ec)
+void wss::detail::peer::finish_wait_tx(const boost::system::error_code& wait_ec)
 {
     boost::system::error_code send_ec;
     _waiting_tx = false;
@@ -197,7 +197,7 @@ void wss::transport::peer::finish_wait_tx(const boost::system::error_code& wait_
         do_wait_tx();
 }
 
-void wss::transport::peer::process_buffer()
+void wss::detail::peer::process_buffer()
 {
     // Process as many WebSocket frames as possible.
     while (true)
@@ -238,7 +238,7 @@ void wss::transport::peer::process_buffer()
     do_wait_rx();
 }
 
-void wss::transport::peer::process_websocket_frame(
+void wss::detail::peer::process_websocket_frame(
     const detail::websocket_protocol::decoded_header& header,
     std::uint8_t *data,
     std::size_t size,
@@ -292,7 +292,7 @@ void wss::transport::peer::process_websocket_frame(
     }
 }
 
-void wss::transport::peer::process_packet(
+void wss::detail::peer::process_packet(
     const std::uint8_t *data,
     std::size_t size)
 {
@@ -322,7 +322,7 @@ void wss::transport::peer::process_packet(
     }
 }
 
-void wss::transport::peer::process_data_packet(
+void wss::detail::peer::process_data_packet(
     unsigned signo,
     const std::uint8_t *data,
     std::size_t size)
@@ -330,7 +330,7 @@ void wss::transport::peer::process_data_packet(
     on_data_received(signo, data, size);
 }
 
-void wss::transport::peer::process_metadata_packet(
+void wss::detail::peer::process_metadata_packet(
     unsigned signo,
     const std::uint8_t *data,
     std::size_t size)
@@ -368,7 +368,7 @@ void wss::transport::peer::process_metadata_packet(
     }
 }
 
-void wss::transport::peer::close(
+void wss::detail::peer::close(
     const boost::system::error_code& ec)
 {
     if (_is_closed)

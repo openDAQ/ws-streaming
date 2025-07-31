@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <map>
 #include <string>
 #include <utility>
@@ -25,9 +26,11 @@ namespace wss::detail
 
                 local_signal& signal;
                 unsigned signo;
-                bool is_subscribed = false;
+                bool is_explicitly_subscribed = false;
+                unsigned implicit_subscribe_count = 0;
                 boost::signals2::scoped_connection on_metadata_changed;
-                boost::signals2::scoped_connection on_data;
+                boost::signals2::scoped_connection on_data_published;
+                std::int64_t linear_value = 0;
             };
 
         protected:

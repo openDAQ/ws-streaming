@@ -19,24 +19,24 @@
 #include <boost/optional/optional.hpp>
 #include <boost/system/error_code.hpp>
 
+#include <ws-streaming/detail/http_client_servicer.hpp>
 #include <ws-streaming/detail/websocket_protocol.hpp>
-#include <ws-streaming/transport/http_client_servicer.hpp>
 
 using namespace std::chrono_literals;
 using namespace std::placeholders;
 
-wss::transport::http_client_servicer::http_client_servicer(
+wss::detail::http_client_servicer::http_client_servicer(
         boost::asio::ip::tcp::socket&& socket)
     : stream(std::move(socket))
 {
 }
 
-void wss::transport::http_client_servicer::run()
+void wss::detail::http_client_servicer::run()
 {
     do_read();
 }
 
-void wss::transport::http_client_servicer::stop()
+void wss::detail::http_client_servicer::stop()
 {
     boost::asio::post(
         stream.get_executor(),
@@ -46,7 +46,7 @@ void wss::transport::http_client_servicer::stop()
         });
 }
 
-void wss::transport::http_client_servicer::do_read()
+void wss::detail::http_client_servicer::do_read()
 {
     stream.expires_after(30s);
 
@@ -61,7 +61,7 @@ void wss::transport::http_client_servicer::do_read()
             _2));
 }
 
-void wss::transport::http_client_servicer::do_write(
+void wss::detail::http_client_servicer::do_write(
     boost::beast::http::message_generator&& msg,
     response_actions action)
 {
@@ -76,7 +76,7 @@ void wss::transport::http_client_servicer::do_write(
             _2));
 }
 
-void wss::transport::http_client_servicer::finish_read(
+void wss::detail::http_client_servicer::finish_read(
     const boost::system::error_code& ec,
     std::size_t bytes_transferred)
 {
@@ -192,7 +192,7 @@ void wss::transport::http_client_servicer::finish_read(
     }
 }
 
-void wss::transport::http_client_servicer::finish_write(
+void wss::detail::http_client_servicer::finish_write(
     response_actions action,
     const boost::beast::error_code& ec,
     std::size_t bytes_transferred)
@@ -216,7 +216,7 @@ void wss::transport::http_client_servicer::finish_write(
     }
 }
 
-void wss::transport::http_client_servicer::do_response(
+void wss::detail::http_client_servicer::do_response(
     const boost::beast::http::request<boost::beast::http::string_body>& req,
     boost::beast::http::status status,
     const nlohmann::json& response_json)
@@ -237,7 +237,7 @@ void wss::transport::http_client_servicer::do_response(
 }
 
 template <typename Body>
-void wss::transport::http_client_servicer::do_response(
+void wss::detail::http_client_servicer::do_response(
     boost::beast::http::response<Body>& response)
 {
     response.set(
@@ -258,7 +258,7 @@ void wss::transport::http_client_servicer::do_response(
                 : response_actions::close);
 }
 
-void wss::transport::http_client_servicer::close(
+void wss::detail::http_client_servicer::close(
     const boost::system::error_code& ec)
 {
     if (ec == boost::beast::error::timeout)

@@ -9,7 +9,7 @@
 #include <boost/asio.hpp>
 
 #include <ws-streaming/local_signal.hpp>
-#include <ws-streaming/transport/server.hpp>
+#include <ws-streaming/server.hpp>
 
 using namespace std::chrono_literals;
 
@@ -24,7 +24,7 @@ void tick(
     if (ec)
         return;
 
-    ai0.on_data("hello", 5);
+    ai0.publish_data("hello", 5);
     dt.expires_after(100ms);
     dt.async_wait(std::bind(tick, std::ref(dt), std::placeholders::_1));
 }
@@ -32,7 +32,7 @@ void tick(
 int main(int argc, char *argv[])
 {
     boost::asio::io_context ioc(1);
-    wss::transport::server server(ioc.get_executor());
+    wss::server server(ioc.get_executor());
     server.add_signal(ai0);
     server.run();
 
