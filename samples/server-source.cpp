@@ -85,6 +85,4 @@ int main(int argc, char *argv[])
     // When the Boost.Asio event loop exits, clean up our asynchronous acquisition loop thread.
     exit = true;
     thread.join();
-
-    return 0;
 }

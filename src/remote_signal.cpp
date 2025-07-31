@@ -19,7 +19,7 @@ unsigned wss::remote_signal::signo() const noexcept
     return _signo;
 }
 
-const nlohmann::json& wss::remote_signal::metadata() const noexcept
+const wss::metadata& wss::remote_signal::metadata() const noexcept
 {
     return _metadata;
 }

@@ -34,6 +34,8 @@ void wss::server::run()
 
 void wss::server::stop()
 {
+    std::cout << "server::stop() in" << std::endl;
+
     for (const auto& listener : _listeners)
         listener.l->stop();
     _listeners.clear();
@@ -45,6 +47,8 @@ void wss::server::stop()
     for (const auto& session : _sessions)
         session.client->stop();
     _sessions.clear();
+
+    std::cout << "server::stop() out" << std::endl;
 }
 
 void wss::server::add_signal(local_signal& signal)

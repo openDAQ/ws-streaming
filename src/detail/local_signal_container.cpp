@@ -1,4 +1,6 @@
 #include <algorithm>
+#include <string>
+#include <utility>
 
 #include <ws-streaming/local_signal.hpp>
 #include <ws-streaming/detail/local_signal_container.hpp>

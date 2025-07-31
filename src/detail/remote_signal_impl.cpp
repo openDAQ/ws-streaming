@@ -34,7 +34,7 @@ void wss::detail::remote_signal_impl::handle_data(
     std::size_t size)
 {
     if (_is_subscribed)
-        on_data_received();
+        on_data_received(0, data, size);
 }
 
 void wss::detail::remote_signal_impl::handle_metadata(

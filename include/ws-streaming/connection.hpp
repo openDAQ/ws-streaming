@@ -37,6 +37,8 @@ namespace wss
                 boost::asio::ip::tcp::socket&& socket,
                 bool is_client);
 
+            ~connection();
+
             void run();
 
             void run(const void *data, std::size_t size);
@@ -46,6 +48,11 @@ namespace wss
             void add_signal(local_signal& signal);
 
             void remove_signal(local_signal& signal);
+
+            const boost::asio::any_io_executor& get_executor() const noexcept
+            {
+                return _peer->socket().get_executor();
+            }
 
             boost::signals2::signal<
                 void(const std::shared_ptr<remote_signal>&)

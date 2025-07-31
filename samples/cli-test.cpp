@@ -1,3 +1,5 @@
+#include <cstddef>
+#include <cstdint>
 #include <iostream>
 #include <memory>
 #include <utility>
@@ -51,7 +53,7 @@ int main(int argc, char *argv[])
                         std::cout << "signal subscribed" << std::endl;
                     });
 
-                    signal->on_data_received.connect([signal]()
+                    signal->on_data_received.connect([signal](std::int64_t, const void *, std::size_t)
                     {
                         std::cout << "signal data " << signal->id() << std::endl;
                     });
@@ -154,6 +156,4 @@ int main(int argc, char *argv[])
         ioc.run();
         std::cout << "ioc.run() returned" << std::endl;
     }
-
-    return 0;
 }

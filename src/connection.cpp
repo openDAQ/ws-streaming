@@ -30,13 +30,19 @@ wss::connection::connection(
     , _local_stream_id{_peer->socket().remote_endpoint().address().to_string()
         + ":" + std::to_string(_peer->socket().remote_endpoint().port())}
 {
-    _on_peer_data_received = _peer->on_data_received.connect(std::bind(&connection::on_peer_data_received, this, _1, _2, _3));
-    _on_peer_metadata_received = _peer->on_metadata_received.connect(std::bind(&connection::on_peer_metadata_received, this, _1, _2, _3));
-    _on_peer_closed = _peer->on_closed.connect(std::bind(&connection::on_peer_closed, this, _1));
+}
+
+wss::connection::~connection()
+{
+    _peer->stop();
 }
 
 void wss::connection::run()
 {
+    _on_peer_data_received = _peer->on_data_received.connect(std::bind(&connection::on_peer_data_received, shared_from_this(), _1, _2, _3));
+    _on_peer_metadata_received = _peer->on_metadata_received.connect(std::bind(&connection::on_peer_metadata_received, shared_from_this(), _1, _2, _3));
+    _on_peer_closed = _peer->on_closed.connect(std::bind(&connection::on_peer_closed, shared_from_this(), _1));
+
     _peer->run();
 
     if (!_is_client)
@@ -45,6 +51,10 @@ void wss::connection::run()
 
 void wss::connection::run(const void *data, std::size_t size)
 {
+    _on_peer_data_received = _peer->on_data_received.connect(std::bind(&connection::on_peer_data_received, shared_from_this(), _1, _2, _3));
+    _on_peer_metadata_received = _peer->on_metadata_received.connect(std::bind(&connection::on_peer_metadata_received, shared_from_this(), _1, _2, _3));
+    _on_peer_closed = _peer->on_closed.connect(std::bind(&connection::on_peer_closed, shared_from_this(), _1));
+
     _peer->run(data, size);
 
     if (!_is_client)
@@ -145,8 +155,6 @@ void wss::connection::on_peer_metadata_received(
 void wss::connection::on_peer_closed(
     const boost::system::error_code& ec)
 {
-    std::cout << "connection::on_peer_closed" << std::endl;
-
     _on_peer_data_received.disconnect();
     _on_peer_metadata_received.disconnect();
     _on_peer_closed.disconnect();
@@ -165,7 +173,6 @@ void wss::connection::on_peer_closed(
 void wss::connection::on_local_signal_metadata_changed(
     detail::local_signal_container::local_signal_entry& signal)
 {
-    std::cout << "on_local_signal_metadata_changed" << std::endl;
     _peer->send_metadata(signal.signo, "signal", signal.signal.metadata().json());
 }
 
@@ -176,21 +183,16 @@ void wss::connection::on_local_signal_data_published(
     const void *data,
     std::size_t size)
 {
-    std::cout << "on_local_signal_data(" << domain_value << ", " << sample_count << ", ...)" << std::endl;
-
     if (sample_count)
     {
-        std::cout << "looking for domain signal" << std::endl;
         auto *domain_signal = find_local_signal(signal.signal.table_id());
 
         if (domain_signal)
         {
             std::int64_t new_linear_value = domain_value - (signal.signal.sample_index() - domain_signal->signal.sample_index()) * domain_signal->signal.linear_start_delta().second;
-            std::cout << "have domain signal; new linear value is " << new_linear_value << " = " << domain_value << " - (" << signal.signal.sample_index() << " - " << domain_signal->signal.sample_index() << ") * " << domain_signal->signal.linear_start_delta().second << std::endl;
-
+ 
             if (domain_signal->linear_value != new_linear_value)
             {
-                std::cout << domain_signal->linear_value << " != " << new_linear_value << "; sending {" << signal.signal.sample_index() << ", " << domain_value << "}" << std::endl;
                 domain_signal->linear_value = new_linear_value;
 
                 std::int64_t x[2];
@@ -461,7 +463,6 @@ bool wss::connection::subscribe(
     const std::string& signal_id,
     bool is_explicit)
 {
-    std::cout << "subscribe(" << signal_id << ", " << is_explicit << ")" << std::endl;
     auto *signal = find_local_signal(signal_id);
     if (!signal)
         return false;
@@ -478,12 +479,8 @@ bool wss::connection::subscribe(
     if (is_explicit)
     {
         auto table_id = signal->signal.metadata().table_id();
-        std::cout << "table is '" << table_id << "'" << std::endl;
         if (!table_id.empty() && table_id != signal_id)
-        {
-            std::cout << "doing implicit subscribe" << std::endl;
             subscribe(table_id, false);
-        }
     }
 
     _peer->send_metadata(
@@ -493,8 +490,6 @@ bool wss::connection::subscribe(
             { "signalId", signal->signal.id() }
         });
 
-    std::cout << "initial sample count is " << signal->signal.sample_index() << std::endl;
-
     nlohmann::json metadata = signal->signal.metadata().json();
     metadata["valueIndex"] = signal->signal.sample_index();
 
@@ -503,7 +498,6 @@ bool wss::connection::subscribe(
         "signal",
         metadata);
 
-    std::cout << "subscribing to local_signal on_data" << std::endl;
     signal->on_data_published = signal->signal.on_data_published.connect(
         std::bind(
             &connection::on_local_signal_data_published,
@@ -514,7 +508,6 @@ bool wss::connection::subscribe(
             _3,
             _4));
 
-    std::cout << "subscribing to local_signal on_metadata" << std::endl;
     signal->on_metadata_changed = signal->signal.on_metadata_changed.connect(
         std::bind(
             &connection::on_local_signal_metadata_changed,
@@ -539,7 +532,6 @@ bool wss::connection::unsubscribe(
     if (signal->is_explicitly_subscribed || signal->implicit_subscribe_count > 0)
         return false;
 
-    std::cout << "unsubscribe: disconnecting on_data and on_metadata_changed" << std::endl;
     signal->on_data_published.disconnect();
     signal->on_metadata_changed.disconnect();
     signal->linear_value = 0;

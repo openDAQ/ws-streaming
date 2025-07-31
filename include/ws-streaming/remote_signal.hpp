@@ -1,11 +1,14 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <string>
 
 #include <boost/signals2/signal.hpp>
 
 #include <nlohmann/json.hpp>
+
+#include <ws-streaming/metadata.hpp>
 
 namespace wss
 {
@@ -19,13 +22,13 @@ namespace wss
             boost::signals2::signal<void()> on_subscribed;
             boost::signals2::signal<void()> on_unsubscribed;
             boost::signals2::signal<void()> on_metadata_changed;
-            boost::signals2::signal<void()> on_data_received;
+            boost::signals2::signal<void(std::int64_t domain_value, const void *data, std::size_t size)> on_data_received;
             boost::signals2::signal<void()> on_unavailable;
 
             const std::string& id() const noexcept;
             bool is_subscribed() const noexcept;
             unsigned signo() const noexcept;
-            const nlohmann::json& metadata() const noexcept;
+            const wss::metadata& metadata() const noexcept;
 
         protected:
 
@@ -35,7 +38,7 @@ namespace wss
 
             bool _is_subscribed = false;
             unsigned _signo = 0;
-            nlohmann::json _metadata = nullptr;
+            wss::metadata _metadata;
 
         private:
 

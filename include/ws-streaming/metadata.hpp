@@ -23,6 +23,11 @@ namespace wss
         public:
 
             /**
+             * Constructs an empty metadata object. Such metadata is not valid for a signal.
+             */
+            metadata();
+
+            /**
              * Constructs a metadata object from the specified JSON.
              *
              * @param json A reference to a JSON object containing the signal metadata. This JSON

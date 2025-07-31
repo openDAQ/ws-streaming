@@ -184,6 +184,6 @@ namespace wss
             std::pair<std::int64_t, std::int64_t> _linear_start_delta;
             wss::metadata _metadata;
             std::string _table_id;
-            std::size_t _sample_index;
+            std::size_t _sample_index = 0;
     };
 }
