@@ -37,6 +37,9 @@ namespace wss::detail
             remote_signal_entry *find_remote_signal(const std::string& id);
             remote_signal_entry *find_remote_signal(unsigned signo);
 
+            const remote_signal_entry *find_remote_signal(const std::string& id) const;
+            const remote_signal_entry *find_remote_signal(unsigned signo) const;
+
             template <typename Func>
             void clear_remote_signals(Func&& func)
             {

@@ -4,6 +4,7 @@
 #include <nlohmann/json.hpp>
 
 #include <ws-streaming/metadata_builder.hpp>
+#include <ws-streaming/struct_field_builder.hpp>
 #include <ws-streaming/unit.hpp>
 
 wss::metadata_builder::metadata_builder(
@@ -32,8 +33,15 @@ wss::metadata_builder::metadata_builder(
 wss::metadata_builder::metadata_builder(
         from_json_t,
         const nlohmann::json& metadata)
-    : _metadata(metadata)
+    : _metadata(metadata.is_object() ? metadata : nlohmann::json::object())
 {
+    if (!_metadata.contains("definition")
+            || !_metadata["definition"].is_object())
+        _metadata["definition"] = nlohmann::json::object();
+
+    if (!_metadata.contains("interpretation")
+            || !_metadata["interpretation"].is_object())
+        _metadata["interpretation"] = nlohmann::json::object();
 }
 
 wss::metadata_builder& wss::metadata_builder::data_type(
@@ -81,6 +89,18 @@ wss::metadata_builder& wss::metadata_builder::range(
         { "low", low },
         { "high", high }
     };
+
+    return *this;
+}
+
+wss::metadata_builder& wss::metadata_builder::struct_field(
+    const struct_field_builder& field)
+{
+    if (!_metadata["definition"].contains("struct") ||
+            !_metadata["definition"]["struct"].is_array())
+        _metadata["definition"]["struct"] = nlohmann::json::array();
+
+    _metadata["definition"]["struct"].push_back(field.build());
 
     return *this;
 }

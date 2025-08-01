@@ -24,10 +24,11 @@ namespace wss
             server(boost::asio::any_io_executor executor);
 
             void run();
-            void stop();
 
-            void add_signal(local_signal& signal);
-            void remove_signal(local_signal& signal);
+            void close();
+
+            void add_local_signal(local_signal& signal);
+            void remove_local_signal(local_signal& signal);
 
             boost::signals2::signal<
                 void(

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(ws-streaming VERSION 1.0.0 LANGUAGES CXX)
+project(ws-streaming VERSION 3.0.0 LANGUAGES CXX)
 
 option(WS_STREAMING_ENABLE_SAMPLES  "Build sample programs" ON)
 option(WS_STREAMING_ENABLE_TESTS    "Build unit tests"      ON)

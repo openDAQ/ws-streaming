@@ -40,7 +40,7 @@ void wss::client::async_connect(
         url.host_address(),
         port,
         create_request(url),
-        [handler = std::move(handler), hostname = url.host_address()](
+        [handler = std::move(handler)](
             const boost::system::error_code& ec,
             const boost::beast::http::response<boost::beast::http::string_body>& response,
             boost::beast::tcp_stream& stream,
@@ -53,7 +53,6 @@ void wss::client::async_connect(
                 return handler(boost::beast::http::error::bad_status, {});
 
             auto connection = std::make_shared<wss::connection>(
-                hostname,
                 stream.release_socket(),
                 true);
 

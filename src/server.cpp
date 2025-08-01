@@ -32,14 +32,14 @@ void wss::server::run()
     }
 }
 
-void wss::server::stop()
+void wss::server::close()
 {
     for (const auto& listener : _listeners)
         listener.l->stop();
     _listeners.clear();
 
     for (const auto& client : _clients)
-        client.connection->stop();
+        client.connection->close();
     _clients.clear();
 
     for (const auto& session : _sessions)
@@ -47,18 +47,18 @@ void wss::server::stop()
     _sessions.clear();
 }
 
-void wss::server::add_signal(local_signal& signal)
+void wss::server::add_local_signal(local_signal& signal)
 {
     if (_signals.emplace(&signal).second)
         for (const auto& c : _clients)
-            c.connection->add_signal(signal);
+            c.connection->add_local_signal(signal);
 }
 
-void wss::server::remove_signal(local_signal& signal)
+void wss::server::remove_local_signal(local_signal& signal)
 {
     if (_signals.erase(&signal))
         for (const auto& c : _clients)
-            c.connection->remove_signal(signal);
+            c.connection->remove_local_signal(signal);
 }
 
 void wss::server::add_listener(std::uint16_t port)
@@ -105,12 +105,11 @@ void wss::server::on_servicer_websocket_upgrade(
     boost::asio::ip::tcp::socket& socket)
 {
     auto connection = std::make_shared<wss::connection>(
-        socket.remote_endpoint().address().to_string(),
         std::move(socket),
         false);
 
     for (const auto& signal : _signals)
-        connection->add_signal(*signal);
+        connection->add_local_signal(*signal);
 
     auto& entry = _clients.emplace_back(connection);
 

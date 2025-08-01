@@ -66,25 +66,25 @@ std::pair<std::int64_t, std::int64_t> wss::metadata::linear_start_delta() const
 std::size_t wss::metadata::sample_size() const
 {
     std::string type = data_type();
-    if (type == data_types::int8)
+    if (type == data_types::int8_t)
         return sizeof(std::int8_t);
-    if (type == data_types::int16)
+    if (type == data_types::int16_t)
         return sizeof(std::int16_t);
-    if (type == data_types::int32)
+    if (type == data_types::int32_t)
         return sizeof(std::int32_t);
-    if (type == data_types::int64)
+    if (type == data_types::int64_t)
         return sizeof(std::int64_t);
-    if (type == data_types::uint8)
+    if (type == data_types::uint8_t)
         return sizeof(std::uint8_t);
-    if (type == data_types::uint16)
+    if (type == data_types::uint16_t)
         return sizeof(std::uint16_t);
-    if (type == data_types::uint32)
+    if (type == data_types::uint32_t)
         return sizeof(std::uint32_t);
-    if (type == data_types::uint64)
+    if (type == data_types::uint64_t)
         return sizeof(std::uint64_t);
-    if (type == data_types::real32)
+    if (type == data_types::real32_t)
         return 4;
-    if (type == data_types::real64)
+    if (type == data_types::real64_t)
         return 8;
 
     return 0;

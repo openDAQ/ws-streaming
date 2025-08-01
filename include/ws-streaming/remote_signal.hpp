@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <string>
 
 #include <boost/signals2/signal.hpp>
@@ -44,4 +45,6 @@ namespace wss
 
             std::string _id;
     };
+
+    typedef std::shared_ptr<remote_signal> remote_signal_ptr;
 }

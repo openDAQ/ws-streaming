@@ -33,7 +33,7 @@ namespace wss
         public:
 
             /**
-             * Creates a signal with the specified global identifier.
+             * Constructs a signal with the specified global identifier.
              *
              * @param id The signal's global identifier. This string must be unique among all
              *     signals registered with a particular streaming endpoint. The behavior is

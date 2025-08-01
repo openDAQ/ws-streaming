@@ -135,6 +135,8 @@ void wss::detail::remote_signal_impl::handle_signal(
     _linear_start_delta = metadata().linear_start_delta();
     _value_index = metadata().value_index().value_or(_value_index);
     _sample_size = metadata().sample_size();
+
+    on_metadata_changed();
 }
 
 std::int64_t wss::detail::remote_signal_impl::value_index() const noexcept

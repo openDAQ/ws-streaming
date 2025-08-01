@@ -25,6 +25,9 @@
 
 namespace wss
 {
+    /**
+     * Implements a WebSocket Streaming connection to a remote peer.
+     */
     class connection
         : public std::enable_shared_from_this<connection>
         , detail::local_signal_container
@@ -32,36 +35,146 @@ namespace wss
     {
         public:
 
+            /**
+             * Constructs a connection object from a TCP socket. The socket must already have been
+             * connected to the remote peer, including the HTTP WebSocket upgrade request and
+             * response, if necessary.
+             *
+             * Do not directly construct a connection object. Connection instances must always be
+             * managed by a std::shared_ptr; therefore, std::make_shared() should be used.
+             *
+             * After construction, the run() function must be called to register asynchronous
+             * operations with the Boost.Asio execution context.
+             *
+             * @param socket A connected TCP socket. The constructed object takes ownership of the
+             *     socket. The socket's execution context is used for all asynchronous I/O
+             *     operations.
+             * @param is_client True if the connection should behave as a client. The WebSocket
+             *     Streaming Protocol is almost totally symmetric, except for a subtle difference
+             *     during the handshake to support backward compatibility. A server transmits
+             *     greeting information immediately. A client only transmits greeting information
+             *     after the server has indicated a version number high enough to support
+             *     symmetric connections.
+             */
             connection(
-                const std::string& hostname,
                 boost::asio::ip::tcp::socket&& socket,
                 bool is_client);
 
+            /**
+             * Destroys a connection object.
+             */
             ~connection();
 
+            /**
+             * Activates the connection object by scheduling asynchronous I/O operations with the
+             * socket's execution context.
+             */
             void run();
 
+            /**
+             * Activates the connection object by scheduling asynchronous I/O operations with the
+             * socket's execution context. The specified data is consumed as if it had arrived
+             * from the socket. This is useful in scenarios where previous code, such as for
+             * performing an HTTP WebSocket upgrade request, inadvertently buffered WebSocket
+             * Streaming Protocol data.
+             *
+             * @param data A pointer to the inadvertently buffered data.
+             * @param size The number of bytes pointed to by @p data.
+             */
             void run(const void *data, std::size_t size);
 
-            void stop();
+            /**
+             * Deactivates the connection, disconnecting the underlying socket and canceling any
+             * pending asynchronous I/O operations.
+             *
+             * All remote signals known to the connection are detached, causing their
+             * remote_signal::on_unavailable signals to be raised. The connection::on_unavailable
+             * signal is then raised for each signal. Finally, the on_disconnected signal is
+             * raised with the error code boost::asio::error::operation_aborted.
+             */
+            void close();
 
-            void add_signal(local_signal& signal);
+            /**
+             * Registers a local signal with the connection. The signal will be advertised as
+             * available to the remote peer. The connection object connects to the signal's
+             * Boost.Signals2 signals so that data published to the signal can be transmitted to
+             * the remote peer, if subscribed.
+             *
+             * @param signal The local signal to register. The connection object holds a reference
+             *     to this object, and it should not be destroyed until remove_local_signal() has
+             *     returned or the on_disconnected signal has been raised.
+             */
+            void add_local_signal(local_signal& signal);
 
-            void remove_signal(local_signal& signal);
+            /**
+             * Unregisters a local signal from the connection. The signal will be advertised as
+             * unavailable to the remote peer. The connection object disconnects from the signal's
+             * Boost.Signals2 signals.
+             *
+             * @param signal The local signal to unregister.
+             */
+            void remove_local_signal(local_signal& signal);
 
-            const boost::asio::any_io_executor& get_executor() const noexcept
-            {
-                return _peer->socket().get_executor();
-            }
+            /**
+             * Searches for a remote signal with the specified global identifier.
+             *
+             * @param id The global identifier of the remote signal to search for.
+             *
+             * @return A std::shared_ptr to the remote signal, if one with the specified @p id is
+             *     known to the connection. Otherwise, an empty std::shared_ptr.
+             */
+            std::shared_ptr<remote_signal>
+            find_remote_signal(const std::string& id) const;
 
+            /**
+             * Gets the Boost.Asio executor being used by the connection for asynchronous I/O
+             * operations. This is the executor of the socket that was used to construct the
+             * connection.
+             *
+             * @return The Boost.Asio executor being used by the connection for asynchronous I/O
+             *     operations.
+             */
+            const boost::asio::any_io_executor& executor() const noexcept;
+
+            /**
+             * Gets the Boost.Asio socket underlying the connection.
+             *
+             * @return The Boost.Asio socket underlying the connection.
+             */
+            const boost::asio::ip::tcp::socket& socket() const noexcept;
+
+            /**
+             * A Boost.Signals2 signal raised when a new remote signal becomes known to the
+             * connection after being advertised by the remote peer.
+             *
+             * @param signal A std::shared_ptr to the newly available signal.
+             *
+             * @throws ... Connected slots should not throw exceptions. If they do, they will
+             *     propagate out to the execution context. This can result in an unhandled
+             *     exception on a thread and terminate the process.
+             */
             boost::signals2::signal<
-                void(const std::shared_ptr<remote_signal>&)
+                void(const std::shared_ptr<remote_signal>& signal)
             > on_available;
 
+            /**
+             * A Boost.Signals2 signal raised when a remote signal is no longer available from the
+             * remote peer. This can occur if the remote peer indicates the signal is no longer
+             * available, or when the connection has been closed. No further event signals will
+             * be raised by the remote_signal object.
+             *
+             * @throws ... Connected slots should not throw exceptions. If they do, they will
+             *     propagate out to the execution context. This can result in an unhandled
+             *     exception on a thread and terminate the process.
+             */
             boost::signals2::signal<
                 void(const std::shared_ptr<remote_signal>&)
             > on_unavailable;
 
+            /**
+             * A Boost.Signals2 signal raised exactly once when the connection has been closed,
+             * whether caused by an error or by calling close().
+             */
             boost::signals2::signal<
                 void(const boost::system::error_code& ec)
             > on_disconnected;
@@ -120,7 +233,6 @@ namespace wss
 
         private:
 
-            std::string _hostname;
             bool _is_client;
             std::shared_ptr<detail::peer> _peer;
 
@@ -135,4 +247,9 @@ namespace wss
 
             bool _hello_sent = false;
     };
+
+    /**
+     * A convenience typedef for a std::shared_ptr holding a wss::connection object.
+     */
+    typedef std::shared_ptr<connection> connection_ptr;
 }

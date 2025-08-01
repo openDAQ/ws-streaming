@@ -11,6 +11,7 @@
 
 #include <ws-streaming/connection.hpp>
 #include <ws-streaming/metadata.hpp>
+#include <ws-streaming/remote_signal.hpp>
 #include <ws-streaming/detail/command_interface_client_factory.hpp>
 #include <ws-streaming/detail/in_band_command_interface_client.hpp>
 #include <ws-streaming/detail/json_rpc_exception.hpp>
@@ -22,11 +23,9 @@
 using namespace std::placeholders;
 
 wss::connection::connection(
-        const std::string& hostname,
         boost::asio::ip::tcp::socket&& socket,
         bool is_client)
-    : _hostname{hostname}
-    , _is_client{is_client}
+    : _is_client{is_client}
     , _peer{std::make_shared<detail::peer>(std::move(socket), is_client)}
     , _local_stream_id{_peer->socket().remote_endpoint().address().to_string()
         + ":" + std::to_string(_peer->socket().remote_endpoint().port())}
@@ -62,25 +61,42 @@ void wss::connection::run(const void *data, std::size_t size)
         do_hello();
 }
 
-void wss::connection::stop()
+void wss::connection::close()
 {
     _peer->stop();
 }
 
-void wss::connection::add_signal(local_signal& signal)
+void wss::connection::add_local_signal(local_signal& signal)
 {
-    auto [signo, added] = add_local_signal(signal);
+    auto [signo, added] = detail::local_signal_container::add_local_signal(signal);
 
     if (added && _hello_sent)
         _peer->send_metadata(0, "available", { { "signalIds", { signal.id() } } });
 }
 
-void wss::connection::remove_signal(local_signal& signal)
+void wss::connection::remove_local_signal(local_signal& signal)
 {
-    unsigned signo = remove_local_signal(signal);
+    unsigned signo = detail::local_signal_container::remove_local_signal(signal);
 
     if (signo)
         _peer->send_metadata(0, "unavailable", { { "signalIds", { signal.id() } } });
+}
+
+std::shared_ptr<wss::remote_signal>
+wss::connection::find_remote_signal(const std::string& id) const
+{
+    const auto *entry = detail::remote_signal_container::find_remote_signal(id);
+    return entry ? entry->signal : nullptr;
+}
+
+const boost::asio::any_io_executor& wss::connection::executor() const noexcept
+{
+    return _peer->socket().get_executor();
+}
+
+const boost::asio::ip::tcp::socket& wss::connection::socket() const noexcept
+{
+    return _peer->socket();
 }
 
 void wss::connection::do_hello()
@@ -121,7 +137,7 @@ void wss::connection::on_peer_data_received(
     const std::uint8_t *data,
     std::size_t size)
 {
-    auto *signal = find_remote_signal(signo);
+    auto *signal = detail::remote_signal_container::find_remote_signal(signo);
     if (signal)
         signal->signal->handle_data(data, size);
 }
@@ -238,9 +254,9 @@ std::shared_ptr<wss::detail::remote_signal_impl>
 wss::connection::on_signal_sought(
     const std::string& signal_id)
 {
-    auto signal = find_remote_signal(signal_id);
-    if (signal)
-        return signal->signal;
+    auto *entry = detail::remote_signal_container::find_remote_signal(signal_id);
+    if (entry)
+        return entry->signal;
 
     return nullptr;
 }
@@ -250,10 +266,10 @@ void wss::connection::dispatch_metadata(
     const std::string& method,
     const nlohmann::json& params)
 {
-    auto *signal = find_remote_signal(signo);
+    auto *entry = detail::remote_signal_container::find_remote_signal(signo);
 
-    if (signal)
-        signal->signal->handle_metadata(method, params);
+    if (entry)
+        entry->signal->handle_metadata(method, params);
 }
 
 void wss::connection::handle_api_version(
@@ -320,12 +336,12 @@ void wss::connection::handle_subscribe(
             || !params["signalId"].is_string())
         return;
 
-    auto *signal = find_remote_signal(static_cast<std::string>(params["signalId"]));
-    if (!signal)
+    auto *entry = detail::remote_signal_container::find_remote_signal(static_cast<std::string>(params["signalId"]));
+    if (!entry)
         return;
 
-    set_remote_signal_signo(signal, signo);
-    signal->signal->handle_metadata("subscribe", params);
+    set_remote_signal_signo(entry, signo);
+    entry->signal->handle_metadata("subscribe", params);
 }
 
 void wss::connection::handle_unsubscribe(

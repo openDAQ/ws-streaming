@@ -5,6 +5,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <ws-streaming/struct_field_builder.hpp>
 #include <ws-streaming/unit.hpp>
 
 namespace wss
@@ -93,6 +94,16 @@ namespace wss
             metadata_builder& range(
                 double low,
                 double high);
+
+            /**
+             * Adds a field to the definition of the signal's struct data type.
+             *
+             * @param field A builder object used to generate the field description.
+             *
+             * @return A reference to this object.
+             */
+            metadata_builder& struct_field(
+                const struct_field_builder& field);
 
             /**
              * Assigns an associated domain signal.

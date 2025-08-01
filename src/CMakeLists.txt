@@ -10,9 +10,6 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
     CXX_EXTENSIONS          OFF
 )
 
-# TODO REMOVEME!!!
-target_compile_options(${PROJECT_NAME} PUBLIC -Wall -pedantic)
-
 target_compile_definitions(
     ${PROJECT_NAME}
         PRIVATE

@@ -3,8 +3,11 @@
 #include <ws-streaming/quantities.hpp>
 #include <ws-streaming/unit.hpp>
 
-wss::unit wss::unit::seconds    {-1,    "seconds",      quantities::time,       "s"};
-wss::unit wss::unit::volts      {-1,    "volts",        quantities::voltage,    "V"};
+wss::unit wss::unit::seconds        {-1,    "seconds",      quantities::time,       "s"};
+wss::unit wss::unit::milliseconds   {-1,    "milliseconds", quantities::time,       "ms"};
+wss::unit wss::unit::microseconds   {-1,    "microseconds", quantities::time,       u8"µs"};
+wss::unit wss::unit::nanoseconds    {-1,    "nanoseconds",  quantities::time,       "ns"};
+wss::unit wss::unit::volts          {-1,    "volts",        quantities::voltage,    "V"};
 
 wss::unit::unit(
         int id,

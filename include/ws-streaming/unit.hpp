@@ -20,6 +20,21 @@ namespace wss
             static unit seconds;
 
             /**
+             * A unit of "milliseconds", measuring "time" with a symbol of "ms".
+             */
+            static unit milliseconds;
+
+            /**
+             * A unit of "microseconds", measuring "time" with a symbol of "µs".
+             */
+            static unit microseconds;
+
+            /**
+             * A unit of "nanoseconds", measuring "time" with a symbol of "ns".
+             */
+            static unit nanoseconds;
+
+            /**
              * A unit of "volts", measuring "voltage" with a symbol of "V".
              */
             static unit volts;

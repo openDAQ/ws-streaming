@@ -36,3 +36,23 @@ wss::detail::remote_signal_container::find_remote_signal(unsigned signo)
 
     return it->second;
 }
+
+const wss::detail::remote_signal_container::remote_signal_entry *
+wss::detail::remote_signal_container::find_remote_signal(const std::string& id) const
+{
+    auto it = _signals_by_id.find(id);
+    if (it == _signals_by_id.end())
+        return nullptr;
+
+    return &it->second;
+}
+
+const wss::detail::remote_signal_container::remote_signal_entry *
+wss::detail::remote_signal_container::find_remote_signal(unsigned signo) const
+{
+    auto it = _signals_by_signo.find(signo);
+    if (it == _signals_by_signo.end())
+        return nullptr;
+
+    return it->second;
+}

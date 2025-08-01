@@ -24,6 +24,14 @@ namespace wss
         public:
 
             /**
+             * The "UNIX Epoch" expressed as an ISO-8601 date/time string, suitable for use as an
+             * origin() value.
+             */
+            static constexpr const char *unix_epoch = "1970-01-01T00:00:00.000Z";
+
+        public:
+
+            /**
              * Constructs an empty metadata object. Such metadata is not valid for a signal.
              */
             metadata();
