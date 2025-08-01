@@ -43,6 +43,57 @@ if(TARGET Boost::beast)
     target_link_libraries(${PROJECT_NAME} PUBLIC Boost::beast)
 endif()
 
+if(TARGET Boost::serialization)
+    target_link_libraries(${PROJECT_NAME} PUBLIC Boost::serialization)
+endif()
+
 if(TARGET Boost::signals2)
     target_link_libraries(${PROJECT_NAME} PUBLIC Boost::signals2)
+endif()
+
+if(TARGET Boost::uuid)
+    target_link_libraries(${PROJECT_NAME} PUBLIC Boost::uuid)
+endif()
+
+if(WS_STREAMING_INSTALL)
+
+    install(
+        TARGETS ${PROJECT_NAME}
+        EXPORT ${PROJECT_NAME}
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    )
+
+    install(
+        DIRECTORY ../include/ws-streaming
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+        FILES_MATCHING PATTERN *.hpp
+    )
+
+    write_basic_package_version_file(
+        "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}/${PROJECT_NAME}-config-version.cmake"
+        VERSION ${Upstream_VERSION}
+        COMPATIBILITY SameMajorVersion
+    )
+
+    install(
+        EXPORT ${PROJECT_NAME}
+        FILE ${PROJECT_NAME}-targets.cmake
+        NAMESPACE ws-streaming::
+        DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}"
+    )
+
+    configure_package_config_file(
+        ../cmake/${PROJECT_NAME}-config.cmake.in
+        "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}/${PROJECT_NAME}-config.cmake"
+        INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}"
+    )
+
+    install(
+        FILES
+            "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}/${PROJECT_NAME}-config.cmake"
+            "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}/${PROJECT_NAME}-config-version.cmake"
+        DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}"
+    )
+
 endif()

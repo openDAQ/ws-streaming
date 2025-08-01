@@ -4,12 +4,15 @@ project(ws-streaming VERSION 3.0.0 LANGUAGES CXX)
 
 option(WS_STREAMING_ENABLE_SAMPLES  "Build sample programs" ON)
 option(WS_STREAMING_ENABLE_TESTS    "Build unit tests"      ON)
+option(WS_STREAMING_INSTALL         "Install the library"   ON)
 
+include(CMakePackageConfigHelpers)
 include(FetchContent)
 include(GNUInstallDirs)
 
 include(dependencies/Boost.cmake)
 include(dependencies/nlohmann_json.cmake)
+include(dependencies/Threads.cmake)
 
 add_subdirectory(src)
 

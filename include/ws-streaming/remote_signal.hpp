@@ -7,8 +7,6 @@
 
 #include <boost/signals2/signal.hpp>
 
-#include <nlohmann/json.hpp>
-
 #include <ws-streaming/metadata.hpp>
 
 namespace wss

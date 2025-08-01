@@ -14,6 +14,7 @@ foreach(source ${sources})
 
     target_link_libraries(${name}
         PUBLIC
+            Threads::Threads
             ws-streaming::ws-streaming
     )
 
