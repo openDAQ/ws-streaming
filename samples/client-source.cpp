@@ -123,14 +123,14 @@ int main(int argc, char *argv[])
     }};
 
     // Try to connect to the server; on_connected() will be called on success/failure.
-    std::make_shared<wss::client>(ioc.get_executor())
-        ->async_connect(
-            "ws://" + hostname + ":7414",
-            std::bind(on_connected,
-                std::ref(time_signal),
-                std::ref(value_signal),
-                _1,
-                _2));
+    wss::client client{ioc.get_executor()};
+    client.async_connect(
+        "ws://" + hostname + ":7414",
+        std::bind(on_connected,
+            std::ref(time_signal),
+            std::ref(value_signal),
+            _1,
+            _2));
 
     // Enter the Boost.Asio event loop.
     ioc.run();

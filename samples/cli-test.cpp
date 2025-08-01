@@ -16,7 +16,7 @@ int main(int argc, char *argv[])
     std::shared_ptr<wss::remote_signal> subscribed_signal1;
     std::shared_ptr<wss::remote_signal> subscribed_signal2;
 
-    auto c = std::make_shared<wss::client>(ioc.get_executor());
+    wss::client c{ioc.get_executor()};
 
     for (unsigned i = 0; i < 1; ++i)
     {
@@ -27,7 +27,7 @@ int main(int argc, char *argv[])
         boost::asio::deadline_timer t3(ioc);
         boost::asio::deadline_timer t4(ioc);
 
-        c->async_connect(
+        c.async_connect(
             "ws://localhost:7414",
             [&](const boost::system::error_code& ec, const std::shared_ptr<wss::connection>& connection)
             {
@@ -107,7 +107,7 @@ int main(int argc, char *argv[])
             if (conn)
                 conn->stop();
             else
-                c->cancel();
+                c.cancel();
         });
 
         t2.expires_from_now(boost::posix_time::seconds(3));

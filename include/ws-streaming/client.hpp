@@ -5,6 +5,8 @@
 #include <string>
 
 #include <boost/asio/any_io_executor.hpp>
+#include <boost/beast/http/message.hpp>
+#include <boost/beast/http/string_body.hpp>
 #include <boost/system/error_code.hpp>
 #include <boost/url.hpp>
 
@@ -24,10 +26,8 @@ namespace wss
      * at a time may be in progress. Connection attempts can be canceled by calling cancel(); the
      * completion handler will then be called with the error code
      * boost::asio::error::operation_aborted.
-     *
-     * Client instances must always be owned by a std::shared_ptr.
      */
-    class client : public std::enable_shared_from_this<client>
+    class client
     {
         public:
 
@@ -70,6 +70,9 @@ namespace wss
             void cancel();
 
         private:
+
+            boost::beast::http::request<boost::beast::http::string_body> create_request(
+                const boost::urls::url_view& url);
 
             std::string get_random_key();
 

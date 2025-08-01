@@ -89,10 +89,10 @@ int main(int argc, char *argv[])
     boost::asio::io_context ioc{1};
 
     // Try to connect to the server; on_connected() will be called on success/failure.
-    std::make_shared<wss::client>(ioc.get_executor())
-        ->async_connect(
-            "ws://" + hostname + ":7414",
-            on_connected);
+    wss::client client{ioc.get_executor()};
+    client.async_connect(
+        "ws://" + hostname + ":7414",
+        on_connected);
 
     ioc.run();
 }

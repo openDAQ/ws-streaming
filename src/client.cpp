@@ -1,6 +1,7 @@
 #include <chrono>
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <string>
 #include <utility>
 
@@ -31,6 +32,46 @@ void wss::client::async_connect(
             const std::shared_ptr<wss::connection>& connection)
     > handler)
 {
+    std::uint16_t port = url.port_number();
+    if (!port)
+        port = 80;
+
+    _http_client->async_request(
+        url.host_address(),
+        port,
+        create_request(url),
+        [handler = std::move(handler), hostname = url.host_address()](
+            const boost::system::error_code& ec,
+            const boost::beast::http::response<boost::beast::http::string_body>& response,
+            boost::beast::tcp_stream& stream,
+            const boost::beast::flat_buffer& buffer)
+        {
+            if (ec)
+                return handler(ec, {});
+
+            if (response.result() != boost::beast::http::status::switching_protocols)
+                return handler(boost::beast::http::error::bad_status, {});
+
+            auto connection = std::make_shared<wss::connection>(
+                hostname,
+                stream.release_socket(),
+                true);
+
+            auto data = buffer.data();
+            connection->run(data.data(), data.size());
+
+            handler({}, connection);
+        });
+}
+
+void wss::client::cancel()
+{
+    _http_client->cancel();
+}
+
+boost::beast::http::request<boost::beast::http::string_body>
+wss::client::create_request(const boost::urls::url_view& url)
+{
     std::string path = url.path();
     if (path.empty())
         path = "/";
@@ -45,41 +86,7 @@ void wss::client::async_connect(
     request.set(boost::beast::http::field::sec_websocket_key, get_random_key());
     request.set(boost::beast::http::field::upgrade, "websocket");
 
-    std::uint16_t port = url.port_number();
-    if (!port)
-        port = 80;
-
-    _http_client->async_request(
-        url.host_address(),
-        port,
-        std::move(request),
-        [handler = std::move(handler), hostname = url.host_address()](
-            const boost::system::error_code& ec,
-            const boost::beast::http::response<boost::beast::http::string_body>& response,
-            boost::beast::tcp_stream& stream,
-            const boost::beast::flat_buffer& buffer)
-        {
-            if (ec)
-                return handler(ec, {});
-
-            if (response.result() != boost::beast::http::status::switching_protocols)
-                return handler(boost::beast::http::error::bad_status, {});
-
-            auto socket = stream.release_socket();
-            auto connection = std::make_shared<wss::connection>(
-                hostname,
-                std::move(socket),
-                true);
-
-            auto data = buffer.data();
-            connection->run(data.data(), data.size());
-            handler({}, connection);
-        });
-}
-
-void wss::client::cancel()
-{
-    _http_client->cancel();
+    return request;
 }
 
 std::string wss::client::get_random_key()

@@ -42,6 +42,10 @@ if(TARGET Boost::asio)
     target_link_libraries(${PROJECT_NAME} PUBLIC Boost::asio)
 endif()
 
+if(TARGET Boost::beast)
+    target_link_libraries(${PROJECT_NAME} PUBLIC Boost::beast)
+endif()
+
 if(TARGET Boost::signals2)
     target_link_libraries(${PROJECT_NAME} PUBLIC Boost::signals2)
 endif()
