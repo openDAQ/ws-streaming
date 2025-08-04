@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 3.24)
 
 project(ws-streaming VERSION 3.0.0 LANGUAGES CXX)
 
-option(WS_STREAMING_ENABLE_SAMPLES  "Build sample programs" ON)
-option(WS_STREAMING_ENABLE_TESTS    "Build unit tests"      ON)
+option(WS_STREAMING_ENABLE_SAMPLES  "Build sample programs" ${PROJECT_IS_TOP_LEVEL})
+option(WS_STREAMING_ENABLE_TESTS    "Build unit tests"      ${PROJECT_IS_TOP_LEVEL})
 option(WS_STREAMING_INSTALL         "Install the library"   ON)
 
 include(CMakePackageConfigHelpers)
