@@ -144,7 +144,9 @@ void wss::detail::http_client_servicer::finish_read(
         {
             response_json = on_command_interface_request(
                 request_json["method"],
-                request_json.contains("params") ? request_json["params"] : nullptr);
+                request_json.contains("params")
+                    ? request_json["params"]
+                    : nlohmann::json{nullptr});
         }
 
         catch (const std::exception& ex)

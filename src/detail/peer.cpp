@@ -360,7 +360,9 @@ void wss::detail::peer::process_metadata_packet(
                 on_metadata_received(
                     signo,
                     metadata["method"],
-                    metadata.contains("params") ? metadata["params"] : nullptr);
+                    metadata.contains("params")
+                        ? metadata["params"]
+                        : nlohmann::json{nullptr});
             break;
 
         default:
