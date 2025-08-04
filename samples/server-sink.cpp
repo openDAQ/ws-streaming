@@ -23,6 +23,7 @@ int main(int argc, char *argv[])
     // Create the WebSocket Streaming server object. It will use the Boost.Asio execution context
     // to accept incoming connections, generating Boost.Signals2 signals (events) we can react to.
     wss::server server{ioc.get_executor()};
+    server.add_default_listeners();
     server.run();
 
     // Attach a Boost.Signals2 "slot" (event handler) which will be called whenever a

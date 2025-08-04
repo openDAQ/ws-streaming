@@ -16,16 +16,19 @@
 namespace wss
 {
     /**
-     * Asynchronously establishes a WebSocket Streaming connection by making an HTTP/WebSocket
-     * request to a remote server. The caller calls async_connect() with a WebSocket URL. When the
-     * WebSocket connection is established, or an error occurs, the completion handler passed to
-     * async_connect() is called with the corresponding error code and/or a constructed
-     * wss::connection object.
+     * Asynchronously establishes a WebSocket Streaming @ref connection by making an
+     * HTTP/WebSocket request to a remote @ref server. The application calls async_connect() with
+     * a WebSocket URL. When the WebSocket connection is established, or an error occurs, the
+     * completion function passed to async_connect() is called with the corresponding error code
+     * and, if successful, a constructed @ref connection object.
      *
-     * A client object can perform multiple async_connect() calls, but only one connection attempt
+     * A client object can handle multiple async_connect() calls, but only one connection attempt
      * at a time may be in progress. Connection attempts can be canceled by calling cancel(); the
      * completion handler will then be called with the error code
      * boost::asio::error::operation_aborted.
+     *
+     * @subsubsection Example
+     * @include client-usage.cpp
      */
     class client
     {
@@ -46,16 +49,16 @@ namespace wss
              * @param url The WebSocket URL of the remote server.
              * @param handler A completion handler to call when the operation is complete. This
              *     handler receives either a nonzero error code, or a std::shared_ptr holding a
-             *     constructed wss::connection object. The handler is guaranteed to be called
-             *     exactly once, and to be dispatched using the execution context passed to the
-             *     constructor.
+             *     constructed @ref connection object on which connection::run() has been called.
+             *     The handler is guaranteed to be called exactly once, and to be dispatched using
+             *     the execution context passed to the constructor.
              */
             void async_connect(
                 const boost::urls::url_view& url,
                 std::function<
                     void(
                         const boost::system::error_code& ec,
-                        const std::shared_ptr<wss::connection>& connection)
+                        const wss::connection_ptr& connection)
                 > handler);
 
             /**

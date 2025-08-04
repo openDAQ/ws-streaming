@@ -1,0 +1,39 @@
+Bidirectional Streaming Support
+===============================
+
+The WebSocket Streaming Protocol version 3.0 supports bidirectional streaming. That is, data can
+be published or consumed by either endpoint, regardless of their client/server role. In addition,
+both the programming API and the wire protocol are symmetric: code to produce or consume data is
+the same in both roles, and sniffing the WebSocket traffic after the initial handshake would not
+be able to distinguish which side is the server and which is the client.
+
+Protocol Support
+----------------
+
+In order to support bidirectional streaming, the wire protocol has been extended. In older
+versions of the protocol, WebSocket communication was half-duplex: only the server transmitted
+data. A separate HTTP JSON-RPC server was used for the client to submit command interface
+requests, such as to subscribe to and unsubscribe from signals.
+
+In version 3.0, the WebSocket communication is full-duplex, and both the client and server can
+send JSON-RPC messages. In addition, two new JSON-RPC ("metadata") methods have been added,
+called `request` and `response`. These allow for in-band command interface requests, so that no
+additional HTTP connections are needed.
+
+Handshake
+~~~~~~~~~
+
+[seqdiag]
+....
+seqdiag {
+  client -> webserver [label = "HTTP Upgrade"];
+  client <-- webserver;
+  client <- webserver [label = "apiVersion"];
+  client <- webserver [label = "init"];
+  client -> webserver [label = "apiVersion"];
+  client -> webserver [label = "init"];
+}
+....
+
+In-Band Command Interface
+~~~~~~~~~~~~~~~~~~~~~~~~~

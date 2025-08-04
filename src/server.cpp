@@ -20,6 +20,30 @@ using namespace std::placeholders;
 wss::server::server(boost::asio::any_io_executor executor)
     : _executor(executor)
 {
+}
+
+void wss::server::add_listener(std::uint16_t port)
+{
+    add_listener(
+        std::make_shared<listener<>>(
+            _executor,
+            boost::asio::ip::tcp::endpoint({}, port)));
+}
+
+void wss::server::add_listener(
+    std::shared_ptr<listener<>> listener)
+{
+    _listeners.emplace_back(
+        listener,
+        listener->on_accept.connect(
+            std::bind(
+                &server::on_listener_accept,
+                this,
+                _1)));
+}
+
+void wss::server::add_default_listeners()
+{
     add_listener(detail::streaming_protocol::DEFAULT_WEBSOCKET_PORT);
     add_listener(detail::streaming_protocol::DEFAULT_COMMAND_INTERFACE_PORT);
 }
@@ -45,6 +69,8 @@ void wss::server::close()
     for (const auto& session : _sessions)
         session.client->stop();
     _sessions.clear();
+
+    on_closed({});
 }
 
 void wss::server::add_local_signal(local_signal& signal)
@@ -59,22 +85,6 @@ void wss::server::remove_local_signal(local_signal& signal)
     if (_signals.erase(&signal))
         for (const auto& c : _clients)
             c.connection->remove_local_signal(signal);
-}
-
-void wss::server::add_listener(std::uint16_t port)
-{
-    add_listener(
-        std::make_shared<listener<>>(
-            _executor,
-            boost::asio::ip::tcp::endpoint({}, port)));
-}
-
-void wss::server::add_listener(
-    std::shared_ptr<listener<>> listener)
-{
-    _listeners.emplace_back(
-        listener,
-        listener->on_accept.connect(std::bind(&server::on_listener_accept, this, _1)));
 }
 
 void wss::server::on_listener_accept(
@@ -131,7 +141,8 @@ void wss::server::on_servicer_websocket_upgrade(
         std::bind(
             &server::on_connection_disconnected,
             this,
-            connection));
+            connection,
+            _1));
 
     connection->run();
 
@@ -149,26 +160,27 @@ void wss::server::on_servicer_closed(
 }
 
 void wss::server::on_connection_available(
-    const std::shared_ptr<wss::connection>& connection,
-    const std::shared_ptr<remote_signal>& signal)
+    const connection_ptr& connection,
+    const remote_signal_ptr& signal)
 {
     on_available(connection, signal);
 }
 
 void wss::server::on_connection_unavailable(
-    const std::shared_ptr<wss::connection>& connection,
-    const std::shared_ptr<remote_signal>& signal)
+    const connection_ptr& connection,
+    const remote_signal_ptr& signal)
 {
     on_unavailable(connection, signal);
 }
 
 void wss::server::on_connection_disconnected(
-    const std::shared_ptr<wss::connection>& connection)
+    const connection_ptr& connection,
+    const boost::system::error_code& ec)
 {
     _clients.remove_if([&](const connected_client& client)
     {
         return client.connection == connection;
     });
 
-    on_client_disconnected(connection);
+    on_client_disconnected(connection, ec);
 }

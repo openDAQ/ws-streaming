@@ -123,7 +123,7 @@ namespace wss
              * @return A std::shared_ptr to the remote signal, if one with the specified @p id is
              *     known to the connection. Otherwise, an empty std::shared_ptr.
              */
-            std::shared_ptr<remote_signal>
+            remote_signal_ptr
             find_remote_signal(const std::string& id) const;
 
             /**
@@ -154,7 +154,7 @@ namespace wss
              *     exception on a thread and terminate the process.
              */
             boost::signals2::signal<
-                void(const std::shared_ptr<remote_signal>& signal)
+                void(const remote_signal_ptr& signal)
             > on_available;
 
             /**
@@ -163,12 +163,14 @@ namespace wss
              * available, or when the connection has been closed. No further event signals will
              * be raised by the remote_signal object.
              *
+             * @param signal A std::shared_ptr to the signal that is no longer available.
+             *
              * @throws ... Connected slots should not throw exceptions. If they do, they will
              *     propagate out to the execution context. This can result in an unhandled
              *     exception on a thread and terminate the process.
              */
             boost::signals2::signal<
-                void(const std::shared_ptr<remote_signal>&)
+                void(const remote_signal_ptr& signal)
             > on_unavailable;
 
             /**

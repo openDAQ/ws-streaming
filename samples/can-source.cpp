@@ -57,6 +57,7 @@ int main(int argc, char *argv[])
 
     // Create the WebSocket Streaming server and register our signals.
     wss::server server{ioc.get_executor()};
+    server.add_default_listeners();
     server.add_local_signal(time_signal);
     server.add_local_signal(can_signal);
     server.run();

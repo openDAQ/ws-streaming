@@ -82,7 +82,7 @@ void wss::connection::remove_local_signal(local_signal& signal)
         _peer->send_metadata(0, "unavailable", { { "signalIds", { signal.id() } } });
 }
 
-std::shared_ptr<wss::remote_signal>
+wss::remote_signal_ptr
 wss::connection::find_remote_signal(const std::string& id) const
 {
     const auto *entry = detail::remote_signal_container::find_remote_signal(id);
@@ -175,7 +175,7 @@ void wss::connection::on_peer_closed(
     _on_peer_closed.disconnect();
 
     clear_remote_signals(
-        [this](const std::shared_ptr<detail::remote_signal_impl>& signal)
+        [this](const remote_signal_ptr& signal)
         {
             on_unavailable(signal);
         });
