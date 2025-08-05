@@ -36,7 +36,7 @@ void on_available(const wss::remote_signal_ptr& signal)
     std::cout << "available signal: " << signal->id() << std::endl;
 
     // Subscribe to the signal with ID "/Value".
-    if (signal->id() == "/Value")
+    if (signal->id() == "/Value") // /openDAQDevice/Dev/RefDev0/IO/AI/RefCh0/Sig/AI0")
     {
         signal->on_data_received.connect(on_data_received);
         signal->subscribe();
@@ -52,6 +52,8 @@ void on_connected(
         std::cerr << "connection failed: " << ec << std::endl;
         return;
     }
+
+    std::cout << "connected to server" << std::endl;
 
     // Set up a signal handler to stop the connection attempt when Ctrl+C is pressed.
     auto signal_handler = std::make_shared<boost::asio::signal_set>(connection->executor(), SIGINT);

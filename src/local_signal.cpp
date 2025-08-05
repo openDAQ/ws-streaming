@@ -68,3 +68,13 @@ const std::string& wss::local_signal::table_id() const noexcept
 {
     return _table_id;
 }
+
+bool wss::local_signal::is_subscribed() const noexcept
+{
+    return _subscribe_count > 0;
+}
+
+wss::local_signal::subscribe_holder wss::local_signal::increment_subscribe_count()
+{
+    return subscribe_holder(*this);
+}

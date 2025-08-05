@@ -502,6 +502,8 @@ bool wss::connection::subscribe(
     if (was_subscribed)
         return false;
 
+    signal->holder = signal->signal.increment_subscribe_count();
+
     if (is_explicit)
     {
         auto table_id = signal->signal.metadata().table_id();
@@ -561,6 +563,7 @@ bool wss::connection::unsubscribe(
     signal->on_data_published.disconnect();
     signal->on_metadata_changed.disconnect();
     signal->linear_value = 0;
+    signal->holder.close();
 
     _peer->send_metadata(
         signal->signo,

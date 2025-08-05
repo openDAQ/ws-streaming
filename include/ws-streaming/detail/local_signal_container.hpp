@@ -31,6 +31,7 @@ namespace wss::detail
                 boost::signals2::scoped_connection on_metadata_changed;
                 boost::signals2::scoped_connection on_data_published;
                 std::int64_t linear_value = 0;
+                local_signal::subscribe_holder holder;
             };
 
         protected:

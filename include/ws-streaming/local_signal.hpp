@@ -1,5 +1,7 @@
 #pragma once
 
+#include <algorithm>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -144,6 +146,29 @@ namespace wss
             const std::string& table_id() const noexcept;
 
             /**
+             * Tests whether one or more remote peers are subscribed to this signal.
+             *
+             * @return True if one or more remote peers are subscribed to this signal.
+             */
+            bool is_subscribed() const noexcept;
+
+            /**
+             * An event raised when a remote peer has subscribed to the signal. This event can be
+             * used to signal the application to begin publishing data for the signal. Use of this
+             * event is optional; applications may choose to publish data for all signals
+             * regardless of whether a peer is subscribed.
+             */
+            boost::signals2::signal<void()> on_subscribed;
+
+            /**
+             * An event raised when all remote peers have unsubscribed from the signal. This event
+             * can be used to signal the application to stop publishing data for the signal. Use
+             * of this event is optional; applications may choose to publish data for all signals
+             * regardless of whether a peer is subscribed.
+             */
+            boost::signals2::signal<void()> on_unsubscribed;
+
+            /**
              * An event raised when the signal's metadata is changed as a result of the
              * application calling set_metadata(). This event is used internally by streaming
              * endpoints with which this signal is registered.
@@ -176,6 +201,106 @@ namespace wss
                     std::size_t size)
             > on_data_published;
 
+            /**
+             * An RAII object which a caller can hold while a remote peer is subscribed to a
+             * local_signal. Instances of this object are returned by increment_subscribe_count().
+             * When destroyed, the subscribe count of the local_signal is correspondingly
+             * decremented, possibly triggering the on_unsubscribed event if the count reaches
+             * zero.
+             */
+            class subscribe_holder
+            {
+                public:
+
+                    /**
+                     * Constructs an RAII object which does not track a local signal.
+                     */
+                    subscribe_holder() : _signal(nullptr) { }
+
+                    /**
+                     * Constructs an RAII object tracking a local signal, incrementing its
+                     * subscription reference count.
+                     *
+                     * @param signal The local signal to track.
+                     */
+                    subscribe_holder(local_signal& signal)
+                        : _signal(&signal)
+                    {
+                        if (_signal->_subscribe_count++ == 0)
+                            _signal->on_subscribed();
+                    }
+
+                    subscribe_holder(const subscribe_holder&) = delete;
+                    subscribe_holder& operator=(const subscribe_holder&) = delete;
+
+                    /**
+                     * Constructs an RAII object which takes over tracking of the local signal
+                     * tracked by another RAII object.
+                     *
+                     * @param rhs Another RAII object. After the call, @p rhs does not track a
+                     *     signal.
+                     */
+                    subscribe_holder(subscribe_holder&& rhs) : _signal(nullptr)
+                    {
+                        std::swap(_signal, rhs._signal);
+                    }
+
+                    /**
+                     * Takes over tracking of the local signal tracked by another RAII object. If
+                     * this instance previously tracked a local signal, that signal's subscription
+                     * reference count is decremented.
+                     *
+                     * @param rhs Another RAII object. After the call, @p rhs does not track a
+                     *     signal.
+                     *
+                     * @return A reference to this object.
+                     */
+                    subscribe_holder& operator=(subscribe_holder&& rhs)
+                    {
+                        close();
+                        std::swap(_signal, rhs._signal);
+                        return *this;
+                    }
+
+                    /**
+                     * Stops tracking a signal, as if by calling close().
+                     */
+                    ~subscribe_holder()
+                    {
+                        close();
+                    }
+
+                    /**
+                     * Stops tracking the tracked signal (if any), decrementing its subscription
+                     * reference count and possibly triggering its on_unsubscribed event.
+                     */
+                    void close()
+                    {
+                        if (_signal)
+                        {
+                            if (--_signal->_subscribe_count == 0)
+                                _signal->on_unsubscribed();
+                            _signal = nullptr;
+                        }
+                    }
+
+                private:
+
+                    local_signal *_signal;
+            };
+
+            /**
+             * Increments this signal's subscription reference count. This function is used
+             * internally by the library, and is called when another object is interested in
+             * consuming data from this signal. This function may trigger the on_subscribed event,
+             * which can be used by applications to implement lazy data publishing.
+             *
+             * @return An RAII object which, when destroyed, correspondingly decrements the
+             *     subscription reference count, possibly triggering this signal's on_unsubscribed
+             *     event.
+             */
+            subscribe_holder increment_subscribe_count();
+
         private:
 
             std::string _id;
@@ -183,5 +308,6 @@ namespace wss
             wss::metadata _metadata;
             std::string _table_id;
             std::size_t _sample_index = 0;
+            std::atomic<unsigned> _subscribe_count = 0;
     };
 }
