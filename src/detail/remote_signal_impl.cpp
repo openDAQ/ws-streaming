@@ -7,6 +7,7 @@
 
 #include <ws-streaming/data_types.hpp>
 #include <ws-streaming/remote_signal.hpp>
+#include <ws-streaming/rule_types.hpp>
 #include <ws-streaming/detail/remote_signal_impl.hpp>
 #include <ws-streaming/detail/streaming_protocol.hpp>
 
@@ -131,7 +132,7 @@ void wss::detail::remote_signal_impl::handle_signal(
     else
         _domain_signal = on_signal_sought(table_id).value_or(nullptr);
 
-    _is_linear = metadata().is_linear_rule();
+    _is_linear = metadata().rule() == rule_types::linear_rule;
     _linear_start_delta = metadata().linear_start_delta();
     _value_index = metadata().value_index().value_or(_value_index);
     _sample_size = metadata().sample_size();

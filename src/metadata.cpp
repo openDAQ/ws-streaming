@@ -7,6 +7,7 @@
 
 #include <ws-streaming/data_types.hpp>
 #include <ws-streaming/metadata.hpp>
+#include <ws-streaming/rule_types.hpp>
 
 wss::metadata::metadata()
     : _json(nlohmann::json::object())
@@ -28,19 +29,9 @@ std::string wss::metadata::data_type() const
     return "";
 }
 
-bool wss::metadata::is_linear_rule() const
-{
-    if (auto rule = _json.value<nlohmann::json>(
-                nlohmann::json::json_pointer("/definition/rule"), nullptr);
-            rule.is_string() && rule == "linear")
-        return true;
-
-    return false;
-}
-
 std::pair<std::int64_t, std::int64_t> wss::metadata::linear_start_delta() const
 {
-    if (!is_linear_rule())
+    if (rule() != rule_types::linear_rule)
         return std::make_pair(0, 0);
 
     if (auto parameters = _json.value<nlohmann::json>(
@@ -61,6 +52,57 @@ std::pair<std::int64_t, std::int64_t> wss::metadata::linear_start_delta() const
     }
 
     return std::make_pair(0, 0);
+}
+
+std::string wss::metadata::name() const
+{
+    if (auto name = _json.value<nlohmann::json>(
+            nlohmann::json::json_pointer("/definition/name"), nullptr);
+            name.is_string())
+        return name;
+
+    return "";
+}
+
+std::string wss::metadata::origin() const
+{
+    if (auto origin = _json.value<nlohmann::json>(
+            nlohmann::json::json_pointer("/definition/origin"), nullptr);
+            origin.is_string())
+        return origin;
+
+    return "";
+}
+
+std::optional<std::pair<double, double>>
+wss::metadata::range() const
+{
+    if (auto range = _json.value<nlohmann::json>(
+        nlohmann::json::json_pointer("/definition/range"), nullptr);
+        range.is_object())
+    {
+        double low = 0, high = 0;
+
+        if (range.contains("low") && range["low"].is_number())
+            low = range["low"];
+
+        if (range.contains("high") && range["high"].is_number())
+            high = range["high"];
+
+        return std::make_pair(low, high);
+    }
+
+    return std::nullopt;
+}
+
+std::string wss::metadata::rule() const
+{
+    if (auto rule = _json.value<nlohmann::json>(
+            nlohmann::json::json_pointer("/definition/rule"), nullptr);
+            rule.is_string())
+        return rule;
+
+    return rule_types::explicit_rule;
 }
 
 std::size_t wss::metadata::sample_size() const
@@ -97,6 +139,54 @@ std::string wss::metadata::table_id() const
         return table_id;
 
     return "";
+}
+
+std::optional<std::pair<std::uint64_t, std::uint64_t>>
+wss::metadata::tick_resolution() const
+{
+    if (auto resolution = _json.value<nlohmann::json>(
+        nlohmann::json::json_pointer("/definition/resolution"), nullptr);
+        resolution.is_object())
+    {
+        std::uint64_t numerator = 1, denominator = 1;
+
+        if (resolution.contains("num") && resolution["num"].is_number_integer())
+            numerator = resolution["num"];
+
+        if (resolution.contains("denom") && resolution["denom"].is_number_integer())
+            denominator = resolution["denom"];
+
+        return std::make_pair(numerator, denominator);
+    }
+
+    return std::nullopt;
+}
+
+std::optional<wss::unit> wss::metadata::unit() const
+{
+    if (auto unit = _json.value<nlohmann::json>(
+        nlohmann::json::json_pointer("/interpretation/unit"), nullptr);
+        unit.is_object())
+    {
+        int id = -1;
+        std::string name, quantity, symbol;
+
+        if (unit.contains("id") && unit["id"].is_number_integer())
+            id = unit["id"];
+
+        if (unit.contains("name") && unit["name"].is_string())
+            name = unit["name"];
+
+        if (unit.contains("quantity") && unit["quantity"].is_string())
+            quantity = unit["quantity"];
+
+        if (unit.contains("symbol") && unit["symbol"].is_string())
+            symbol = unit["symbol"];
+
+        return wss::unit(id, name, quantity, symbol);
+    }
+
+    return std::nullopt;
 }
 
 std::optional<std::int64_t> wss::metadata::value_index() const

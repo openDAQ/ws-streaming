@@ -7,6 +7,8 @@
 
 #include <nlohmann/json.hpp>
 
+#include <ws-streaming/unit.hpp>
+
 namespace wss
 {
     /**
@@ -56,13 +58,6 @@ namespace wss
             std::string data_type() const;
 
             /**
-             * Tests whether the signal has a linear rule.
-             *
-             * @return True if the signal has a linear rule.
-             */
-            bool is_linear_rule() const;
-
-            /**
              * Gets the signal's linear-rule start and delta parameters.
              *
              * @return A pair containing the signal's linear-rule start and delta parameters, in
@@ -70,6 +65,37 @@ namespace wss
              *     is missing in the signal's metadata, zeroes are returned instead.
              */
             std::pair<std::int64_t, std::int64_t> linear_start_delta() const;
+
+            /**
+             * Gets the name of the signal.
+             *
+             * @return The name of the signal, or an empty string if the metadata does not specify
+             *     a signal name.
+             */
+            std::string name() const;
+
+            /**
+             * Gets the origin string of this signal. For time signals, this value is an ISO 8601
+             * date/time string specifying the calendar time represented by zero ticks.
+             *
+             * @return The origin string of this signal, or an empty string if not set.
+             */
+            std::string origin() const;
+
+            /**
+             * Gets the value range of this signal.
+             *
+             * @return A pair consisting of the minimum and maximum expected values, respectively,
+             *     of the signal; or std::nullopt if not set.
+             */
+            std::optional<std::pair<double, double>> range() const;
+
+            /**
+             * Gets the rule type string of this signal.
+             *
+             * @return The rule type string of this signal, or "explicit" if not otherwise set.
+             */
+            std::string rule() const;
 
             /**
              * Calculates the size of a sample, if fixed and if the data type is one recognized by
@@ -88,6 +114,24 @@ namespace wss
              *     if no associated domain signal is specified in the signal's metadata.
              */
             std::string table_id() const;
+
+            /**
+             * Gets the magnitude of a single tick for linear-rule signals. This value specifies
+             * how much of the signal's unit value is represented by a single tick. Tick
+             * resolutions are specified as ratios to allow exact representation of any rational
+             * value.
+             *
+             * @return A pair consisting of the numerator and denominator, respectively, of the
+             *     tick resolution ratio; or std::nullopt if not set.
+             */
+            std::optional<std::pair<std::uint64_t, std::uint64_t>> tick_resolution() const;
+
+            /**
+             * Gets the unit of measurement of the signal.
+             *
+             * @return A unit object, or std::nullopt if not set.
+             */
+            std::optional<wss::unit> unit() const;
 
             /**
              * Gets the "value index," or the sample count at which the last-transmitted

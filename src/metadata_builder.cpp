@@ -4,6 +4,7 @@
 #include <nlohmann/json.hpp>
 
 #include <ws-streaming/metadata_builder.hpp>
+#include <ws-streaming/rule_types.hpp>
 #include <ws-streaming/struct_field_builder.hpp>
 #include <ws-streaming/unit.hpp>
 
@@ -14,7 +15,7 @@ wss::metadata_builder::metadata_builder(
             { "definition", {
                 { "name", name },
                 { "dataType", "real64" },
-                { "rule", "explicit" }
+                { "rule", rule_types::explicit_rule }
             } },
             { "interpretation", {
                 { "sig_name", name },
@@ -56,11 +57,11 @@ wss::metadata_builder& wss::metadata_builder::linear_rule(
     std::int64_t start,
     std::int64_t delta)
 {
-    _metadata["definition"]["rule"] = "linear";
-    _metadata["definition"]["linear"] = { { "delta", delta } };
+    _metadata["definition"]["rule"] = rule_types::linear_rule;
+    _metadata["definition"][rule_types::linear_rule] = { { "delta", delta } };
 
     if (start)
-        _metadata["definition"]["linear"]["start"] = start;
+        _metadata["definition"][rule_types::linear_rule]["start"] = start;
 
     _metadata["interpretation"]["rule"] = {
         { "type", 1 },

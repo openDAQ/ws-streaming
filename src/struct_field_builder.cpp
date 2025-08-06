@@ -3,6 +3,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <ws-streaming/rule_types.hpp>
 #include <ws-streaming/struct_field_builder.hpp>
 
 wss::struct_field_builder::struct_field_builder(
@@ -21,8 +22,8 @@ wss::struct_field_builder& wss::struct_field_builder::array(
     _field["dimensions"] = {
         {
             { "name", "Dimension" },
-            { "rule", "linear" },
-            { "linear", {
+            { "rule", rule_types::linear_rule },
+            { rule_types::linear_rule, {
                 { "delta", 0 },
                 { "size", size },
                 { "start", 1 }
