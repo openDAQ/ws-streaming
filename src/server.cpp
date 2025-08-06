@@ -160,21 +160,21 @@ void wss::server::on_servicer_closed(
 }
 
 void wss::server::on_connection_available(
-    const connection_ptr& connection,
-    const remote_signal_ptr& signal)
+    connection_ptr connection,
+    remote_signal_ptr signal)
 {
     on_available(connection, signal);
 }
 
 void wss::server::on_connection_unavailable(
-    const connection_ptr& connection,
-    const remote_signal_ptr& signal)
+    connection_ptr connection,
+    remote_signal_ptr signal)
 {
     on_unavailable(connection, signal);
 }
 
 void wss::server::on_connection_disconnected(
-    const connection_ptr& connection,
+    connection_ptr connection,
     const boost::system::error_code& ec)
 {
     _clients.remove_if([&](const connected_client& client)

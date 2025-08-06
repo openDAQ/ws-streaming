@@ -154,7 +154,7 @@ namespace wss
              *     exception on a thread and terminate the process.
              */
             boost::signals2::signal<
-                void(const remote_signal_ptr& signal)
+                void(remote_signal_ptr signal)
             > on_available;
 
             /**
@@ -170,7 +170,7 @@ namespace wss
              *     exception on a thread and terminate the process.
              */
             boost::signals2::signal<
-                void(const remote_signal_ptr& signal)
+                void(remote_signal_ptr signal)
             > on_unavailable;
 
             /**

@@ -116,7 +116,7 @@ namespace wss
              *     exception on a thread and terminate the process.
              */
             boost::signals2::signal<
-                void(const connection_ptr& connection)
+                void(connection_ptr& connection)
             > on_client_connected;
 
             /**
@@ -132,8 +132,8 @@ namespace wss
              */
             boost::signals2::signal<
                 void(
-                    const connection_ptr& connection,
-                    const remote_signal_ptr& signal)
+                    connection_ptr connection,
+                    remote_signal_ptr signal)
             > on_available;
 
             /**
@@ -151,8 +151,8 @@ namespace wss
              */
             boost::signals2::signal<
                 void(
-                    const connection_ptr& connection,
-                    const remote_signal_ptr& signal)
+                    connection_ptr connection,
+                    remote_signal_ptr signal)
             > on_unavailable;
 
             /**
@@ -167,7 +167,7 @@ namespace wss
              */
             boost::signals2::signal<
                 void(
-                    const connection_ptr& connection,
+                    connection_ptr& connection,
                     const boost::system::error_code& ec)
             > on_client_disconnected;
 
@@ -189,15 +189,15 @@ namespace wss
             void on_servicer_closed(const std::shared_ptr<detail::http_client_servicer>& servicer, const boost::system::error_code& ec);
 
             void on_connection_available(
-                const connection_ptr& connection,
-                const remote_signal_ptr& signal);
+                connection_ptr connection,
+                remote_signal_ptr signal);
 
             void on_connection_unavailable(
-                const connection_ptr& connection,
-                const remote_signal_ptr& signal);
+                connection_ptr connection,
+                remote_signal_ptr signal);
 
             void on_connection_disconnected(
-                const connection_ptr& connection,
+                connection_ptr connection,
                 const boost::system::error_code& ec);
 
             struct listener_entry
