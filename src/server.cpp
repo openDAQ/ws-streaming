@@ -1,6 +1,5 @@
 #include <algorithm>
 #include <functional>
-#include <iostream>
 #include <memory>
 #include <utility>
 
@@ -11,6 +10,7 @@
 #include <nlohmann/json.hpp>
 
 #include <ws-streaming/connection.hpp>
+#include <ws-streaming/json_rpc_exception.hpp>
 #include <ws-streaming/server.hpp>
 #include <ws-streaming/detail/http_client_servicer.hpp>
 #include <ws-streaming/detail/streaming_protocol.hpp>
@@ -22,12 +22,15 @@ wss::server::server(boost::asio::any_io_executor executor)
 {
 }
 
-void wss::server::add_listener(std::uint16_t port)
+void wss::server::add_listener(std::uint16_t port, bool make_command_interface)
 {
     add_listener(
         std::make_shared<listener<>>(
             _executor,
             boost::asio::ip::tcp::endpoint({}, port)));
+
+    if (make_command_interface)
+        _command_interface_port = port;
 }
 
 void wss::server::add_listener(
@@ -45,7 +48,7 @@ void wss::server::add_listener(
 void wss::server::add_default_listeners()
 {
     add_listener(detail::streaming_protocol::DEFAULT_WEBSOCKET_PORT);
-    add_listener(detail::streaming_protocol::DEFAULT_COMMAND_INTERFACE_PORT);
+    add_listener(detail::streaming_protocol::DEFAULT_COMMAND_INTERFACE_PORT, true);
 }
 
 void wss::server::run()
@@ -96,7 +99,7 @@ void wss::server::on_listener_accept(
     auto client = std::make_shared<detail::http_client_servicer>(std::move(socket));
     _sessions.emplace_back(
         client,
-        client->on_command_interface_request.connect(std::bind(&server::on_servicer_command_interface_request, this, client, _1)),
+        client->on_command_interface_request.connect(std::bind(&server::on_servicer_command_interface_request, this, client, _1, _2)),
         client->on_websocket_upgrade.connect(std::bind(&server::on_servicer_websocket_upgrade, this, client, _1)),
         client->on_closed.connect(std::bind(&server::on_servicer_closed, this, client, _1)));
 
@@ -105,9 +108,25 @@ void wss::server::on_listener_accept(
 
 nlohmann::json wss::server::on_servicer_command_interface_request(
     const std::shared_ptr<detail::http_client_servicer>& servicer,
-    const nlohmann::json& request)
+    const std::string& method,
+    const nlohmann::json& params)
 {
-    return nlohmann::json::object();    
+    std::string stream_id = method.substr(0, method.rfind('.'));
+
+    auto it = std::find_if(
+        _clients.begin(),
+        _clients.end(),
+        [&](connected_client& client)
+        {
+            return client.connection->local_stream_id() == stream_id;
+        });
+
+    if (it != _clients.end())
+        return it->connection->do_command_interface(method, params);
+
+    throw json_rpc_exception(
+        json_rpc_exception::server_error,
+        "no client with stream id " + stream_id);
 }
 
 void wss::server::on_servicer_websocket_upgrade(
@@ -117,6 +136,16 @@ void wss::server::on_servicer_websocket_upgrade(
     auto connection = std::make_shared<wss::connection>(
         std::move(socket),
         false);
+
+    if (_command_interface_port)
+        connection->add_external_command_interface(
+            "jsonrpc-http",
+            {
+                { "httpMethod", "POST" },
+                { "httpPath", "/" },
+                { "httpVersion", "1.1" },
+                { "port", std::to_string(_command_interface_port) }
+            });
 
     for (const auto& signal : _signals)
         connection->add_local_signal(*signal);

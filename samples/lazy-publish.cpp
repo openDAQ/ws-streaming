@@ -32,6 +32,7 @@ int main(int argc, char *argv[])
                 system_clock::period::num,
                 system_clock::period::den)
             .origin(wss::metadata::unix_epoch)
+            .table("/Time")
             .build()};
 
     // Declare an explicit-rule value signal, referencing

@@ -5,7 +5,7 @@
 
 #include <nlohmann/json.hpp>
 
-namespace wss::detail
+namespace wss
 {
     class json_rpc_exception : public std::runtime_error
     {

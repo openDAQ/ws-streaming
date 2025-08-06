@@ -10,11 +10,11 @@
 #include <boost/endian/conversion.hpp>
 
 #include <ws-streaming/connection.hpp>
+#include <ws-streaming/json_rpc_exception.hpp>
 #include <ws-streaming/metadata.hpp>
 #include <ws-streaming/remote_signal.hpp>
 #include <ws-streaming/detail/command_interface_client_factory.hpp>
 #include <ws-streaming/detail/in_band_command_interface_client.hpp>
-#include <ws-streaming/detail/json_rpc_exception.hpp>
 #include <ws-streaming/detail/peer.hpp>
 #include <ws-streaming/detail/remote_signal_impl.hpp>
 #include <ws-streaming/detail/semver.hpp>
@@ -30,11 +30,19 @@ wss::connection::connection(
     , _local_stream_id{_peer->socket().remote_endpoint().address().to_string()
         + ":" + std::to_string(_peer->socket().remote_endpoint().port())}
 {
+    _command_interfaces["jsonrpc"] = { { "httpMethod", "" } };
 }
 
 wss::connection::~connection()
 {
     _peer->stop();
+}
+
+void wss::connection::add_external_command_interface(
+    const std::string& id,
+    const nlohmann::json& params)
+{
+    _command_interfaces[id] = params;
 }
 
 void wss::connection::run()
@@ -99,6 +107,26 @@ const boost::asio::ip::tcp::socket& wss::connection::socket() const noexcept
     return _peer->socket();
 }
 
+const std::string& wss::connection::local_stream_id() const noexcept
+{
+    return _local_stream_id;
+}
+
+nlohmann::json wss::connection::do_command_interface(
+    const std::string& method,
+    const nlohmann::json& params)
+{
+    if (method == _local_stream_id + ".subscribe")
+        return do_command_interface_subscribe(params);
+
+    else if (method == _local_stream_id + ".unsubscribe")
+        return do_command_interface_unsubscribe(params);
+
+    throw json_rpc_exception(
+        json_rpc_exception::method_not_found,
+        "method not found");
+}
+
 void wss::connection::do_hello()
 {
     _peer->send_metadata(
@@ -113,7 +141,7 @@ void wss::connection::do_hello()
         "init",
         {
             { "streamId", _local_stream_id },
-            { "commandInterfaces", { { "jsonrpc", nullptr } } }
+            { "commandInterfaces", _command_interfaces },
         });
 
     auto signal_ids = nlohmann::json::array();
@@ -384,25 +412,15 @@ void wss::connection::handle_command_interface_request(const nlohmann::json& par
         if (!params.is_object()
                 || !params.contains("method")
                 || !params["method"].is_string())
-            throw detail::json_rpc_exception(
-                detail::json_rpc_exception::invalid_request,
+            throw json_rpc_exception(
+                json_rpc_exception::invalid_request,
                 "invalid request object");
 
         std::string method = params["method"];
-
-        if (method == _local_stream_id + ".subscribe")
-            result = do_command_interface_subscribe(params.value<nlohmann::json>("params", nullptr));
-
-        else if (method == _local_stream_id + ".unsubscribe")
-            result = do_command_interface_unsubscribe(params.value<nlohmann::json>("params", nullptr));
-
-        else
-            throw detail::json_rpc_exception(
-                detail::json_rpc_exception::method_not_found,
-                "method not found");
+        result = do_command_interface(method, params.value<nlohmann::json>("params", nullptr));
     }
 
-    catch (const detail::json_rpc_exception& ex)
+    catch (const json_rpc_exception& ex)
     {
         error = ex.json();
     }
@@ -428,8 +446,8 @@ nlohmann::json wss::connection::do_command_interface_subscribe(const nlohmann::j
     if (params.is_string())
     {
         if (!subscribe(params, true))
-            throw detail::json_rpc_exception(
-                detail::json_rpc_exception::server_error,
+            throw json_rpc_exception(
+                json_rpc_exception::server_error,
                 "failed to subscribe signal");
 
         return true;
@@ -446,8 +464,8 @@ nlohmann::json wss::connection::do_command_interface_subscribe(const nlohmann::j
     }
 
     else
-        throw detail::json_rpc_exception(
-            detail::json_rpc_exception::invalid_params,
+        throw json_rpc_exception(
+            json_rpc_exception::invalid_params,
             "params must be a signal ID or an array of signal IDs");
 }
 
@@ -456,8 +474,8 @@ nlohmann::json wss::connection::do_command_interface_unsubscribe(const nlohmann:
     if (params.is_string())
     {
         if (!unsubscribe(params, true))
-            throw detail::json_rpc_exception(
-                detail::json_rpc_exception::server_error,
+            throw json_rpc_exception(
+                json_rpc_exception::server_error,
                 "failed to unsubscribe signal");
 
         return true;
@@ -474,8 +492,8 @@ nlohmann::json wss::connection::do_command_interface_unsubscribe(const nlohmann:
     }
 
     else
-        throw detail::json_rpc_exception(
-            detail::json_rpc_exception::invalid_params,
+        throw json_rpc_exception(
+            json_rpc_exception::invalid_params,
             "params must be a signal ID or an array of signal IDs");
 }
 

@@ -48,8 +48,13 @@ namespace wss
              * Adds a listener so that the server listens on the specified TCP port number.
              *
              * @param port The port number to listen on.
+             * @param make_command_interface True to set this port as the HTTP JSON-RPC
+             *     command interface port, to which clients that do not support the in-band
+             *     command interface can connect to submit command interface requests.
              */
-            void add_listener(std::uint16_t port);
+            void add_listener(
+                std::uint16_t port,
+                bool make_command_interface = false);
 
             /**
              * Adds a listener.
@@ -182,8 +187,13 @@ namespace wss
 
         private:
 
-            void on_listener_accept(boost::asio::ip::tcp::socket& socket);
-            nlohmann::json on_servicer_command_interface_request(const std::shared_ptr<detail::http_client_servicer>& servicer, const nlohmann::json& request);
+            void on_listener_accept(
+                boost::asio::ip::tcp::socket& socket);
+
+            nlohmann::json on_servicer_command_interface_request(
+                const std::shared_ptr<detail::http_client_servicer>& servicer,
+                const std::string& method,
+                const nlohmann::json& params);
 
             void on_servicer_websocket_upgrade(const std::shared_ptr<detail::http_client_servicer>& servicer, boost::asio::ip::tcp::socket& socket);
             void on_servicer_closed(const std::shared_ptr<detail::http_client_servicer>& servicer, const boost::system::error_code& ec);
@@ -252,5 +262,6 @@ namespace wss
             std::list<client_entry> _sessions;
             std::list<connected_client> _clients;
             std::set<local_signal *> _signals;
+            std::uint16_t _command_interface_port = 0;
     };
 }

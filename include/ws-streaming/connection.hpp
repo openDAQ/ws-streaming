@@ -66,6 +66,21 @@ namespace wss
             ~connection();
 
             /**
+             * Registers a command interface with this connection. The command interface will be
+             * advertised to the remote peer during the handshake. This function can be used, for
+             * example, by a server which runs an HTTP server that can accept command interface
+             * requests.
+             *
+             * This function must be called prior to calling run().
+             *
+             * @param id The identifier of the command interface, such as "jsonrpc-http".
+             * @param params Parameters describing the command interface.
+             */
+            void add_external_command_interface(
+                const std::string& id,
+                const nlohmann::json& params);
+
+            /**
              * Activates the connection object by scheduling asynchronous I/O operations with the
              * socket's execution context.
              */
@@ -142,6 +157,30 @@ namespace wss
              * @return The Boost.Asio socket underlying the connection.
              */
             const boost::asio::ip::tcp::socket& socket() const noexcept;
+
+            /**
+             * Gets the local stream ID. This is the stream ID that this connection has generated
+             * and advertised to the remote peer, and the one the remote peer should use when
+             * sending command interface requests.
+             *
+             * @return The local stream ID.
+             */
+            const std::string& local_stream_id() const noexcept;
+
+            /**
+             * Performs a command interface request.
+             *
+             * @param method The command interface method being called.
+             * @param params The method parameters.
+             *
+             * @return A JSON response object, if successful.
+             *
+             * @throws json_rpc_exception An error occurred that should be reported to the client.
+             */
+            nlohmann::json
+            do_command_interface(
+                const std::string& method,
+                const nlohmann::json& params);
 
             /**
              * A Boost.Signals2 signal raised when a new remote signal becomes known to the
@@ -226,7 +265,6 @@ namespace wss
             void handle_command_interface_request(const nlohmann::json& params);
             void handle_command_interface_response(const nlohmann::json& params);
 
-            nlohmann::json do_command_interface(const std::string& method, const nlohmann::json& params);
             nlohmann::json do_command_interface_subscribe(const nlohmann::json& params);
             nlohmann::json do_command_interface_unsubscribe(const nlohmann::json& params);
 
@@ -248,6 +286,8 @@ namespace wss
             boost::signals2::scoped_connection _on_peer_closed;
 
             bool _hello_sent = false;
+
+            nlohmann::json _command_interfaces = nlohmann::json::object();
     };
 
     /**

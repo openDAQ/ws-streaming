@@ -30,6 +30,7 @@ int main(int argc, char *argv[])
             .data_type(wss::data_types::uint64_t)
             .unit(wss::unit::nanoseconds)
             .origin(wss::metadata::unix_epoch)
+            .table("/Time")
             .build()};
 
     // Declare our explicit-rule, struct-valued CAN signal.

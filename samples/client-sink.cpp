@@ -36,7 +36,7 @@ void on_available(const wss::remote_signal_ptr& signal)
     std::cout << "available signal: " << signal->id() << std::endl;
 
     // Subscribe to the signal with ID "/Value".
-    if (signal->id() == "/Value") // /openDAQDevice/Dev/RefDev0/IO/AI/RefCh0/Sig/AI0")
+    if (signal->id() == "/Value")
     {
         signal->on_data_received.connect(on_data_received);
         signal->subscribe();

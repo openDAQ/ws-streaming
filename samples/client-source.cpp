@@ -42,6 +42,7 @@ int main(int argc, char *argv[])
             .tick_resolution(
                 system_clock::period::num,
                 system_clock::period::den)
+            .table("/Time")
             .build()};
 
     // Declare an explicit-rule value signal, referencing

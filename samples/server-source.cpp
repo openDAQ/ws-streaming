@@ -32,12 +32,29 @@ int main(int argc, char *argv[])
                 system_clock::period::num,
                 system_clock::period::den)
             .origin(wss::metadata::unix_epoch)
+            .table("/Time")
             .build()};
 
     // Declare an explicit-rule value signal, referencing
     // the time signal above as its domain ("table").
-    wss::local_signal value_signal{
-        "/Value",
+    wss::local_signal value_signal1{
+        "/Channel1/Value",
+        wss::metadata_builder{"Value"}
+            .data_type(wss::data_types::real64_t)
+            .unit(wss::unit::volts)
+            .range(-10, 10)
+            .table(time_signal.id())
+            .build()};
+    wss::local_signal value_signal2{
+        "/Channel1/Value2",
+        wss::metadata_builder{"Value"}
+            .data_type(wss::data_types::real64_t)
+            .unit(wss::unit::volts)
+            .range(-10, 10)
+            .table(time_signal.id())
+            .build()};
+    wss::local_signal value_signal3{
+        "/Channel1/Value3",
         wss::metadata_builder{"Value"}
             .data_type(wss::data_types::real64_t)
             .unit(wss::unit::volts)
@@ -58,7 +75,19 @@ int main(int argc, char *argv[])
             when += duration_cast<system_clock::duration>(1s) / block_rate;
             std::this_thread::sleep_until(when);
 
-            value_signal.publish_data(
+            value_signal1.publish_data(
+                when.time_since_epoch().count(),
+                samples.size(),
+                samples.data(),
+                sizeof(decltype(samples)::value_type) * samples.size());
+
+            value_signal2.publish_data(
+                when.time_since_epoch().count(),
+                samples.size(),
+                samples.data(),
+                sizeof(decltype(samples)::value_type) * samples.size());
+
+            value_signal3.publish_data(
                 when.time_since_epoch().count(),
                 samples.size(),
                 samples.data(),
@@ -74,7 +103,9 @@ int main(int argc, char *argv[])
     wss::server server{ioc.get_executor()};
     server.add_default_listeners();
     server.add_local_signal(time_signal);
-    server.add_local_signal(value_signal);
+    server.add_local_signal(value_signal1);
+    server.add_local_signal(value_signal2);
+    server.add_local_signal(value_signal3);
     server.run();
 
     // Set up a Boost.Asio signal handler to gracefully close the server when Ctrl+C is pressed.
