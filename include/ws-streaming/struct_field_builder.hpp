@@ -5,6 +5,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <ws-streaming/dimension_builder.hpp>
 #include <ws-streaming/unit.hpp>
 
 namespace wss
@@ -35,6 +36,16 @@ namespace wss
              */
             struct_field_builder& array(
                 std::size_t size);
+
+            /**
+             * Adds a dimension to this structure field.
+             *
+             * @param dimension A builder object used to generate the dimension description.
+             *
+             * @return A reference to this object.
+             */
+            struct_field_builder& dimension(
+                const dimension_builder& dimension);
 
             /**
              * Sets the data type string of the field. The wss::data_types namespace contains

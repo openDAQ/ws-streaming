@@ -76,7 +76,7 @@ namespace wss
              * @param id The identifier of the command interface, such as "jsonrpc-http".
              * @param params Parameters describing the command interface.
              */
-            void add_external_command_interface(
+            void register_external_command_interface(
                 const std::string& id,
                 const nlohmann::json& params);
 

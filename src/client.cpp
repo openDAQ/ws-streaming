@@ -29,7 +29,7 @@ void wss::client::async_connect(
     std::function<
         void(
             const boost::system::error_code& ec,
-            const connection_ptr& connection)
+            connection_ptr connection)
     > handler)
 {
     std::uint16_t port = url.port_number();

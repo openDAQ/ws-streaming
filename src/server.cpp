@@ -138,7 +138,7 @@ void wss::server::on_servicer_websocket_upgrade(
         false);
 
     if (_command_interface_port)
-        connection->add_external_command_interface(
+        connection->register_external_command_interface(
             "jsonrpc-http",
             {
                 { "httpMethod", "POST" },

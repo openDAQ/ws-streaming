@@ -38,7 +38,7 @@ wss::connection::~connection()
     _peer->stop();
 }
 
-void wss::connection::add_external_command_interface(
+void wss::connection::register_external_command_interface(
     const std::string& id,
     const nlohmann::json& params)
 {
@@ -203,7 +203,7 @@ void wss::connection::on_peer_closed(
     _on_peer_closed.disconnect();
 
     clear_remote_signals(
-        [this](const remote_signal_ptr& signal)
+        [this](remote_signal_ptr signal)
         {
             on_unavailable(signal);
         });
@@ -230,7 +230,7 @@ void wss::connection::on_local_signal_data_published(
     {
         auto *domain_signal = find_local_signal(signal.signal.table_id());
 
-        if (domain_signal)
+        if (domain_signal && domain_signal->signal.is_linear())
         {
             std::int64_t new_linear_value = domain_value - (signal.signal.sample_index() - domain_signal->signal.sample_index()) * domain_signal->signal.linear_start_delta().second;
 

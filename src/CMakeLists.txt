@@ -57,6 +57,13 @@ endif()
 
 if(WS_STREAMING_INSTALL)
 
+    if(NOT Boost_FOUND)
+        message(FATAL_ERROR
+            "WS_STREAMING_INSTALL is ON, but Boost was fetched instead of using an installed"
+            " version. This is not supported at this time. Please install Boost first, or turn"
+            " off WS_STREAMING_INSTALL.")
+    endif()
+
     install(
         TARGETS ${PROJECT_NAME}
         EXPORT ${PROJECT_NAME}

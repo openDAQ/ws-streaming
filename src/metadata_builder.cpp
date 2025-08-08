@@ -14,7 +14,6 @@ wss::metadata_builder::metadata_builder(
         {
             { "definition", {
                 { "name", name },
-                { "dataType", "real64" },
                 { "rule", rule_types::explicit_rule }
             } },
             { "interpretation", {

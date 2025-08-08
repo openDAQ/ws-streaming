@@ -51,7 +51,7 @@ int main(int argc, char *argv[])
     // Set up an asynchronous acquisition loop thread which publishes 100 samples every
     // 100 milliseconds, for a total sample rate of 1 kHz or a sample interval of 1ms.
     std::atomic<bool> exit = false;
-    std::thread thread{[&]()
+    std::thread thread{[&]
     {
         std::vector<double> samples(sample_rate / block_rate);
         auto when = system_clock::now();
@@ -87,6 +87,10 @@ int main(int argc, char *argv[])
     server.add_local_signal(time_signal);
     server.add_local_signal(value_signal);
     server.run();
+
+    server.on_client_connected.connect([](wss::connection_ptr connection)
+    {
+    });
 
     // Set up a Boost.Asio signal handler to gracefully close the server when Ctrl+C is pressed.
     boost::asio::signal_set signals{ioc, SIGINT};

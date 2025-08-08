@@ -1,3 +1,4 @@
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -8,6 +9,22 @@
 #include <ws-streaming/data_types.hpp>
 #include <ws-streaming/metadata.hpp>
 #include <ws-streaming/rule_types.hpp>
+
+static std::size_t get_primitive_size(const std::string& type)
+{
+    if (type == wss::data_types::int8_t) return sizeof(std::int8_t);
+    if (type == wss::data_types::int16_t) return sizeof(std::int16_t);
+    if (type == wss::data_types::int32_t) return sizeof(std::int32_t);
+    if (type == wss::data_types::int64_t) return sizeof(std::int64_t);
+    if (type == wss::data_types::uint8_t) return sizeof(std::uint8_t);
+    if (type == wss::data_types::uint16_t) return sizeof(std::uint16_t);
+    if (type == wss::data_types::uint32_t) return sizeof(std::uint32_t);
+    if (type == wss::data_types::uint64_t) return sizeof(std::uint64_t);
+    if (type == wss::data_types::real32_t) return 4;
+    if (type == wss::data_types::real64_t) return 8;
+
+    return 0;
+}
 
 wss::metadata::metadata()
     : _json(nlohmann::json::object())
@@ -108,28 +125,40 @@ std::string wss::metadata::rule() const
 std::size_t wss::metadata::sample_size() const
 {
     std::string type = data_type();
-    if (type == data_types::int8_t)
-        return sizeof(std::int8_t);
-    if (type == data_types::int16_t)
-        return sizeof(std::int16_t);
-    if (type == data_types::int32_t)
-        return sizeof(std::int32_t);
-    if (type == data_types::int64_t)
-        return sizeof(std::int64_t);
-    if (type == data_types::uint8_t)
-        return sizeof(std::uint8_t);
-    if (type == data_types::uint16_t)
-        return sizeof(std::uint16_t);
-    if (type == data_types::uint32_t)
-        return sizeof(std::uint32_t);
-    if (type == data_types::uint64_t)
-        return sizeof(std::uint64_t);
-    if (type == data_types::real32_t)
-        return 4;
-    if (type == data_types::real64_t)
-        return 8;
 
-    return 0;
+    std::size_t size = get_primitive_size(type);
+
+    if (!size && type == data_types::struct_t)
+    {
+        if (auto struct_array = _json.value<nlohmann::json>(
+            nlohmann::json::json_pointer("/definition/struct"), nullptr);
+            struct_array.is_array())
+        {
+            for (const auto& field : struct_array)
+            {
+                if (!field.is_object())
+                    continue;
+                if (!field.contains("dataType") || !field["dataType"].is_string())
+                    continue;
+
+                std::size_t field_size = get_primitive_size(field["dataType"]);
+
+                if (auto linear = field.value<nlohmann::json>(
+                    nlohmann::json::json_pointer("/dimensions/0/linear"), nullptr);
+                    linear.is_object())
+                {
+                    std::size_t count = 1;
+                    if (linear.contains("size") && linear["size"].is_number_integer())
+                        count = linear["size"];
+                    field_size *= count;
+                }
+
+                size += field_size;
+            }
+        }
+    }
+
+    return size;
 }
 
 std::string wss::metadata::table_id() const

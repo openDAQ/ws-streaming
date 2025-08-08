@@ -108,6 +108,15 @@ namespace wss
             const std::string& id() const noexcept;
 
             /**
+             * Tests whether this signal has a linear data rule. This values is cached by
+             * set_metadata(), and so this member function is more efficient than calling
+             * `metadata().rule()`.
+             *
+             * @return True if this signal has a linear data rule.
+             */
+            bool is_linear() const noexcept;
+
+            /**
              * Gets the signal's linear-rule start and delta parameters. These values are cached
              * by set_metadata(), and so this member function is more efficient than calling
              * `metadata().linear_start_delta()`.
@@ -304,6 +313,7 @@ namespace wss
         private:
 
             std::string _id;
+            bool _is_linear = false;
             std::pair<std::int64_t, std::int64_t> _linear_start_delta;
             wss::metadata _metadata;
             std::string _table_id;

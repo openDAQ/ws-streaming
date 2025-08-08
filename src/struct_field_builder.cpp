@@ -11,7 +11,7 @@ wss::struct_field_builder::struct_field_builder(
     : _field(
         {
             { "name", name },
-            { "rule", "explicit "}
+            { "rule", "explicit" }
         })
 {
 }
@@ -38,6 +38,17 @@ wss::struct_field_builder& wss::struct_field_builder::data_type(
     const std::string& type)
 {
     _field["dataType"] = type;
+
+    return *this;
+}
+
+wss::struct_field_builder& wss::struct_field_builder::dimension(
+    const dimension_builder& dimension)
+{
+    if (!_field.contains("dimensions") || _field["dimensions"].is_array())
+        _field["dimensions"] = nlohmann::json::array();
+
+    _field["dimensions"].push_back(dimension.build());
 
     return *this;
 }

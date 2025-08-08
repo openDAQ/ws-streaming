@@ -58,7 +58,7 @@ namespace wss
                 std::function<
                     void(
                         const boost::system::error_code& ec,
-                        const wss::connection_ptr& connection)
+                        wss::connection_ptr connection)
                 > handler);
 
             /**

@@ -13,7 +13,7 @@ else()
     message(STATUS "Fetching Boost...")
 
     FetchContent_Declare(Boost
-        URL             https://github.com/boostorg/boost/releases/download/boost-1.84.0/boost-1.84.0.tar.xz
+        URL https://github.com/boostorg/boost/releases/download/boost-1.84.0/boost-1.84.0.tar.xz
         OVERRIDE_FIND_PACKAGE
     )
 

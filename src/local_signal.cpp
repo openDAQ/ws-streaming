@@ -5,6 +5,7 @@
 
 #include <ws-streaming/local_signal.hpp>
 #include <ws-streaming/metadata.hpp>
+#include <ws-streaming/rule_types.hpp>
 
 wss::local_signal::local_signal(
         const std::string& id,
@@ -18,6 +19,7 @@ void wss::local_signal::set_metadata(const wss::metadata& metadata)
 {
     _metadata = metadata;
 
+    _is_linear = _metadata.rule() == rule_types::linear_rule;
     _linear_start_delta = _metadata.linear_start_delta();
     _table_id = _metadata.table_id();
 
@@ -46,6 +48,11 @@ void wss::local_signal::publish_data(
 const std::string& wss::local_signal::id() const noexcept
 {
     return _id;
+}
+
+bool wss::local_signal::is_linear() const noexcept
+{
+    return _is_linear;
 }
 
 const std::pair<std::int64_t, std::int64_t>

@@ -29,7 +29,7 @@ static constexpr unsigned block_rate = 10;
 
 // Forward declarations, so we can order the code as it executes chronologically.
 void on_disconnected(std::shared_ptr<boost::asio::signal_set> signal_handler, const boost::signals2::connection& slot_connection, const boost::system::error_code& ec);
-void on_connected(wss::local_signal& time_signal, wss::local_signal& value_signal, const boost::system::error_code& ec, const wss::connection_ptr& connection);
+void on_connected(wss::local_signal& time_signal, wss::local_signal& value_signal, const boost::system::error_code& ec, wss::connection_ptr connection);
 
 int main(int argc, char *argv[])
 {
@@ -113,7 +113,7 @@ void on_connected(
     wss::local_signal& time_signal,
     wss::local_signal& value_signal,
     const boost::system::error_code& ec,
-    const wss::connection_ptr& connection)
+    wss::connection_ptr connection)
 {
     if (ec)
     {
