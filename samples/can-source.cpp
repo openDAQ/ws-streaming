@@ -7,7 +7,6 @@
 #include <atomic>
 #include <chrono>
 #include <cstring>
-#include <iostream>
 #include <random>
 #include <thread>
 #include <vector>
@@ -89,7 +88,6 @@ int main(int argc, char *argv[])
         while (!exit)
         {
             unsigned mss = uniform(random_engine);
-            std::cout << "waiting " << mss << " ms" << std::endl;
             when += std::chrono::milliseconds(mss);
             std::this_thread::sleep_until(when);
 

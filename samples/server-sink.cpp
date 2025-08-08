@@ -12,7 +12,7 @@
 #include <ws-streaming/ws-streaming.hpp>
 
 // Forward declarations, so we can order the code as it executes chronologically.
-void on_data_received(std::int64_t domain_value, const void *data, std::size_t size);
+void on_data_received(std::int64_t domain_value, std::size_t sample_count, const void *data, std::size_t size);
 void on_available(const wss::connection_ptr& connection, const wss::remote_signal_ptr& signal);
 
 int main(int argc, char *argv[])
@@ -64,7 +64,11 @@ void on_available(
     }
 }
 
-void on_data_received(std::int64_t domain_value, const void *data, std::size_t size)
+void on_data_received(
+    std::int64_t domain_value,
+    std::size_t sample_count,
+    const void *data,
+    std::size_t size)
 {
     std::cout << "received " << size << " data byte(s) with domain value " << domain_value << std::endl;
 }

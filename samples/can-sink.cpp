@@ -45,7 +45,11 @@ void on_unavailable(std::shared_ptr<signal_state> state)
     state->on_unavailable.disconnect();
 }
 
-void on_domain_data_received(std::int64_t domain_value, const void *data, std::size_t size)
+void on_domain_data_received(
+    std::int64_t domain_value,
+    std::size_t sample_count,
+    const void *data,
+    std::size_t size)
 {
     std::cout << "received " << size << " domain data byte(s)" << std::endl;
 }
@@ -70,7 +74,11 @@ void on_metadata_changed(std::shared_ptr<signal_state> state)
     }
 }
 
-void on_data_received(std::int64_t domain_value, const void *data, std::size_t size)
+void on_data_received(
+    std::int64_t domain_value,
+    std::size_t sample_count,
+    const void *data,
+    std::size_t size)
 {
     std::cout << "received " << size << " data byte(s) with domain value " << domain_value << std::endl;
 }

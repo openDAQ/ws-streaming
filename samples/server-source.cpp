@@ -4,6 +4,8 @@
 
 #include <atomic>
 #include <chrono>
+#include <cmath>
+#include <cstdint>
 #include <thread>
 #include <vector>
 
@@ -37,24 +39,8 @@ int main(int argc, char *argv[])
 
     // Declare an explicit-rule value signal, referencing
     // the time signal above as its domain ("table").
-    wss::local_signal value_signal1{
+    wss::local_signal value_signal{
         "/Channel1/Value",
-        wss::metadata_builder{"Value"}
-            .data_type(wss::data_types::real64_t)
-            .unit(wss::unit::volts)
-            .range(-10, 10)
-            .table(time_signal.id())
-            .build()};
-    wss::local_signal value_signal2{
-        "/Channel1/Value2",
-        wss::metadata_builder{"Value"}
-            .data_type(wss::data_types::real64_t)
-            .unit(wss::unit::volts)
-            .range(-10, 10)
-            .table(time_signal.id())
-            .build()};
-    wss::local_signal value_signal3{
-        "/Channel1/Value3",
         wss::metadata_builder{"Value"}
             .data_type(wss::data_types::real64_t)
             .unit(wss::unit::volts)
@@ -69,25 +55,21 @@ int main(int argc, char *argv[])
     {
         std::vector<double> samples(sample_rate / block_rate);
         auto when = system_clock::now();
+        std::uint64_t t = 0;
 
         while (!exit)
         {
             when += duration_cast<system_clock::duration>(1s) / block_rate;
             std::this_thread::sleep_until(when);
 
-            value_signal1.publish_data(
-                when.time_since_epoch().count(),
-                samples.size(),
-                samples.data(),
-                sizeof(decltype(samples)::value_type) * samples.size());
+            // Make a sine wave with a period of 2*pi seconds.
+            for (std::size_t i = 0; i < samples.size(); ++i)
+                samples[i] = std::sin(++t / static_cast<double>(sample_rate));
 
-            value_signal2.publish_data(
-                when.time_since_epoch().count(),
-                samples.size(),
-                samples.data(),
-                sizeof(decltype(samples)::value_type) * samples.size());
-
-            value_signal3.publish_data(
+            // It is safe to call wss::local_signal::publish_data() from any thread without
+            // explicit synchronization. However, *we* must not access or call any members of
+            // local_signal concurrently.
+            value_signal.publish_data(
                 when.time_since_epoch().count(),
                 samples.size(),
                 samples.data(),
@@ -103,9 +85,7 @@ int main(int argc, char *argv[])
     wss::server server{ioc.get_executor()};
     server.add_default_listeners();
     server.add_local_signal(time_signal);
-    server.add_local_signal(value_signal1);
-    server.add_local_signal(value_signal2);
-    server.add_local_signal(value_signal3);
+    server.add_local_signal(value_signal);
     server.run();
 
     // Set up a Boost.Asio signal handler to gracefully close the server when Ctrl+C is pressed.

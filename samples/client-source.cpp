@@ -5,6 +5,8 @@
 
 #include <atomic>
 #include <chrono>
+#include <cmath>
+#include <cstdint>
 #include <functional>
 #include <iostream>
 #include <memory>
@@ -63,11 +65,16 @@ int main(int argc, char *argv[])
     {
         std::vector<double> samples(sample_rate / block_rate);
         auto when = system_clock::now();
+        std::uint64_t t = 0;
 
         while (!exit)
         {
             when += duration_cast<system_clock::duration>(1s) / block_rate;
             std::this_thread::sleep_until(when);
+
+            // Make a sine wave with a period of 2*pi seconds.
+            for (std::size_t i = 0; i < samples.size(); ++i)
+                samples[i] = std::sin(++t / static_cast<double>(sample_rate));
 
             // It is safe to call wss::local_signal::publish_data() from any thread without
             // explicit synchronization. However, *we* must not access or call any members of

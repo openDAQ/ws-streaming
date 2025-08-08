@@ -188,7 +188,7 @@ void wss::connection::on_peer_metadata_received(
     else if (method == "available")
         handle_available(params);
     else if (method == "unavailable")
-        handle_available(params);
+        handle_unavailable(params);
     else if (method == "request")
         handle_command_interface_request(params);
     else if (method == "response")

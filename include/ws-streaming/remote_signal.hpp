@@ -21,7 +21,7 @@ namespace wss
             boost::signals2::signal<void()> on_subscribed;
             boost::signals2::signal<void()> on_unsubscribed;
             boost::signals2::signal<void()> on_metadata_changed;
-            boost::signals2::signal<void(std::int64_t domain_value, const void *data, std::size_t size)> on_data_received;
+            boost::signals2::signal<void(std::int64_t domain_value, std::size_t sample_count, const void *data, std::size_t size)> on_data_received;
             boost::signals2::signal<void()> on_unavailable;
 
             const std::string& id() const noexcept;

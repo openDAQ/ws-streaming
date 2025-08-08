@@ -57,7 +57,11 @@ void wss::detail::remote_signal_impl::handle_data(
             + (_value_index - _domain_signal->_value_index)
             * _domain_signal->_linear_start_delta.second;
 
-    on_data_received(linear_value, data, size);
+    std::size_t sample_count = 0;
+    if (_sample_size && !_is_linear)
+        sample_count = size / _sample_size;
+
+    on_data_received(linear_value, sample_count, data, size);
 
     if (_sample_size && !_is_linear)
         _value_index += size / _sample_size;
