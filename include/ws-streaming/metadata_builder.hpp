@@ -48,6 +48,13 @@ namespace wss
                 const nlohmann::json& metadata);
 
             /**
+             * Gives the signal a constant rule.
+             *
+             * @return A reference to this object.
+             */
+            metadata_builder& constant_rule();
+
+            /**
              * Sets the data type string of the signal. The wss::data_types namespace contains
              * constants for the data types specified by the WebSocket Streaming Protocol
              * specification, but user-defined data types are also allowed.

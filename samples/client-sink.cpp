@@ -32,7 +32,7 @@ void on_data_received(
     const void *data,
     std::size_t size)
 {
-    std::cout << "received " << size << " data byte(s) with domain value " << domain_value << std::endl;
+    std::cout << "received " << size << " data byte(s), " << sample_count << " sample(s) with domain value " << domain_value << std::endl;
 }
 
 void on_available(const wss::remote_signal_ptr& signal)

@@ -46,16 +46,22 @@ void wss::detail::remote_signal_impl::handle_data(
         {
             const auto* payload = static_cast<const streaming_protocol::linear_payload *>(data);
             _value_index = boost::endian::little_to_native(payload->sample_index);
+            _highest_linked_value_index = _value_index;
             _linear_value = boost::endian::little_to_native(payload->value);
         }
     }
 
     std::int64_t linear_value = 0;
-    
+
     if (_domain_signal && _domain_signal->_is_linear)
+    {
+        if (!_is_explicit)
+            _value_index = _domain_signal->_highest_linked_value_index;
+
         linear_value = _domain_signal->_linear_value
             + (_value_index - _domain_signal->_value_index)
             * _domain_signal->_linear_start_delta.second;
+    }
 
     std::size_t sample_count = 0;
     if (_sample_size && !_is_linear)
@@ -63,8 +69,11 @@ void wss::detail::remote_signal_impl::handle_data(
 
     on_data_received(linear_value, sample_count, data, size);
 
-    if (_sample_size && !_is_linear)
+    if (_sample_size && _is_explicit)
         _value_index += size / _sample_size;
+
+    if (_is_explicit && _domain_signal && _value_index > _domain_signal->_highest_linked_value_index)
+        _domain_signal->_highest_linked_value_index = _value_index;
 }
 
 void wss::detail::remote_signal_impl::handle_metadata(
@@ -136,9 +145,12 @@ void wss::detail::remote_signal_impl::handle_signal(
     else
         _domain_signal = on_signal_sought(table_id).value_or(nullptr);
 
+    _is_explicit = metadata().rule() == rule_types::explicit_rule;
     _is_linear = metadata().rule() == rule_types::linear_rule;
+    _is_constant = metadata().rule() == rule_types::constant_rule;
     _linear_start_delta = metadata().linear_start_delta();
     _value_index = metadata().value_index().value_or(_value_index);
+    _highest_linked_value_index = _value_index;
     _sample_size = metadata().sample_size();
 
     on_metadata_changed();

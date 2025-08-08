@@ -45,6 +45,19 @@ wss::metadata_builder::metadata_builder(
         _metadata["interpretation"] = nlohmann::json::object();
 }
 
+wss::metadata_builder& wss::metadata_builder::constant_rule()
+{
+    _metadata["definition"]["rule"] = rule_types::constant_rule;
+    _metadata["definition"].erase(rule_types::linear_rule);
+
+    _metadata["interpretation"]["rule"] = {
+        { "type", 2 },
+        { "parameters", { } }
+    };
+
+    return *this;
+}
+
 wss::metadata_builder& wss::metadata_builder::data_type(
     const std::string& type)
 {

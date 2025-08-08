@@ -83,6 +83,7 @@ wss::client::create_request(const boost::urls::url_view& url)
     request.set(boost::beast::http::field::connection, "Upgrade");
     request.set(boost::beast::http::field::host, url.host_address());
     request.set(boost::beast::http::field::sec_websocket_key, get_random_key());
+    request.set(boost::beast::http::field::sec_websocket_version, "13");
     request.set(boost::beast::http::field::upgrade, "websocket");
 
     return request;
