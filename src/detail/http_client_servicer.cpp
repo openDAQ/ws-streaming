@@ -271,7 +271,7 @@ void wss::detail::http_client_servicer::close(
 
     boost::beast::error_code shutdown_ec;
     stream.socket().shutdown(boost::asio::ip::tcp::socket::shutdown_send, shutdown_ec);
-    stream.close(); 
+    stream.close();
 
     on_closed(ec);
 }

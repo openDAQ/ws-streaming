@@ -13,9 +13,12 @@
 #include <ws-streaming/json_rpc_exception.hpp>
 #include <ws-streaming/metadata.hpp>
 #include <ws-streaming/remote_signal.hpp>
+#include <ws-streaming/rule_types.hpp>
 #include <ws-streaming/detail/command_interface_client_factory.hpp>
 #include <ws-streaming/detail/in_band_command_interface_client.hpp>
+#include <ws-streaming/detail/linear_table.hpp>
 #include <ws-streaming/detail/peer.hpp>
+#include <ws-streaming/detail/registered_local_signal.hpp>
 #include <ws-streaming/detail/remote_signal_impl.hpp>
 #include <ws-streaming/detail/semver.hpp>
 #include <ws-streaming/detail/streaming_protocol.hpp>
@@ -76,10 +79,30 @@ void wss::connection::close()
 
 void wss::connection::add_local_signal(local_signal& signal)
 {
-    auto [signo, added] = detail::local_signal_container::add_local_signal(signal);
+    auto [entry, added] = detail::local_signal_container::add_local_signal(signal);
 
-    if (added && _hello_sent)
-        _peer->send_metadata(0, "available", { { "signalIds", { signal.id() } } });
+    if (added)
+    {
+        auto rule = signal.metadata().rule();
+        entry.get().is_explicit = rule == rule_types::explicit_rule;
+
+        if (rule == rule_types::linear_rule)
+            entry.get().table = std::make_shared<detail::linear_table>(signal.metadata());
+
+        auto table_id = signal.metadata().table_id();
+        if (!table_id.empty() && table_id != signal.id())
+        {
+            auto domain_entry = find_local_signal(table_id);
+            if (domain_entry)
+            {
+                entry.get().domain_signo = domain_entry->signo;
+                entry.get().domain_table = domain_entry->table;
+            }
+        }
+
+        if (_hello_sent)
+            _peer->send_metadata(0, "available", { { "signalIds", { signal.id() } } });
+    }
 }
 
 void wss::connection::remove_local_signal(local_signal& signal)
@@ -214,44 +237,75 @@ void wss::connection::on_peer_closed(
 }
 
 void wss::connection::on_local_signal_metadata_changed(
-    detail::local_signal_container::local_signal_entry& signal)
+    detail::registered_local_signal& entry)
 {
-    _peer->send_metadata(signal.signo, "signal", signal.signal.metadata().json());
+    if (entry.signal.metadata().rule() == rule_types::linear_rule)
+    {
+        if (entry.table)
+            entry.table->update(entry.signal.metadata());
+        else
+            entry.table = std::make_shared<detail::linear_table>(entry.signal.metadata());
+    }
+
+    else
+        entry.table.reset();
+
+    auto table_id = entry.signal.metadata().table_id();
+    entry.domain_signo = 0;
+    entry.domain_table.reset();
+
+    if (!table_id.empty() && table_id != entry.signal.id())
+    {
+        auto domain_entry = find_local_signal(table_id);
+
+        if (domain_entry)
+        {
+            entry.domain_signo = domain_entry->signo;
+            entry.domain_table = domain_entry->table;
+        }
+    }
+
+    _peer->send_metadata(entry.signo, "signal", entry.signal.metadata().json());
 }
 
 void wss::connection::on_local_signal_data_published(
-    detail::local_signal_container::local_signal_entry& signal,
+    detail::registered_local_signal& entry,
     std::int64_t domain_value,
     std::size_t sample_count,
     const void *data,
     std::size_t size)
 {
-    if (sample_count)
+    auto domain_table = entry.domain_table.lock();
+
+    if (domain_table)
     {
-        auto *domain_signal = find_local_signal(signal.signal.table_id());
+        std::int64_t index
+            = entry.is_explicit
+                ? entry.value_index
+                : domain_table->driven_index();
 
-        if (domain_signal && domain_signal->signal.is_linear())
+        if (domain_value != domain_table->value_at(index))
         {
-            std::int64_t new_linear_value = domain_value - (signal.signal.sample_index() - domain_signal->signal.sample_index()) * domain_signal->signal.linear_start_delta().second;
+            domain_table->set(index, domain_value);
 
-            if (domain_signal->linear_value != new_linear_value)
-            {
-                domain_signal->linear_value = new_linear_value;
-                detail::streaming_protocol::linear_payload payload;
+            detail::streaming_protocol::linear_payload payload;
+            payload.sample_index = boost::endian::native_to_little(index);
+            payload.value = boost::endian::native_to_little(domain_value);
 
-                payload.sample_index = boost::endian::native_to_little(signal.signal.sample_index());
-                payload.value = boost::endian::native_to_little(domain_value);
-
-                _peer->send_data(
-                    domain_signal->signo,
-                    boost::asio::const_buffer{&payload, sizeof(payload)});
-            }
+            _peer->send_data(
+                entry.domain_signo,
+                boost::asio::const_buffer{&payload, sizeof(payload)});
         }
     }
 
     _peer->send_data(
-        signal.signo,
+        entry.signo,
         boost::asio::const_buffer{data, size});
+
+    entry.value_index += sample_count;
+
+    if (entry.is_explicit && domain_table)
+        domain_table->drive_to(entry.value_index);
 }
 
 void wss::connection::on_signal_subscribe_requested(
@@ -537,7 +591,7 @@ bool wss::connection::subscribe(
         });
 
     nlohmann::json metadata = signal->signal.metadata().json();
-    metadata["valueIndex"] = signal->signal.sample_index();
+    metadata["valueIndex"] = signal->value_index;
 
     _peer->send_metadata(
         signal->signo,
@@ -580,7 +634,6 @@ bool wss::connection::unsubscribe(
 
     signal->on_data_published.disconnect();
     signal->on_metadata_changed.disconnect();
-    signal->linear_value = 0;
     signal->holder.close();
 
     _peer->send_metadata(

@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -11,6 +12,7 @@
 #include <nlohmann/json.hpp>
 
 #include <ws-streaming/remote_signal.hpp>
+#include <ws-streaming/detail/linear_table.hpp>
 
 namespace wss::detail
 {
@@ -46,24 +48,17 @@ namespace wss::detail
             void handle_unsubscribe();
             void handle_signal(const nlohmann::json& params);
 
-            std::int64_t value_index() const noexcept;
-            std::int64_t linear_value() const noexcept;
-
         private:
 
             unsigned _subscription_count = 0;
+
+            std::shared_ptr<linear_table> _table;
+            std::weak_ptr<linear_table> _domain_table;
+
             std::shared_ptr<remote_signal_impl> _domain_signal;
 
             bool _is_explicit = false;
-            bool _is_linear = false;
-            bool _is_constant = false;
-
-            std::pair<std::int64_t, std::int64_t> _linear_start_delta = std::make_pair(0, 0);
-
-            std::int64_t _value_index = 0;
-            std::int64_t _linear_value = 0;
             std::size_t _sample_size = 0;
-
-            std::int64_t _highest_linked_value_index = 0;
+            std::int64_t _value_index = 0;
     };
 }

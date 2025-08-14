@@ -40,40 +40,47 @@ void wss::detail::remote_signal_impl::handle_data(
     if (!_is_subscribed)
         return;
 
-    if (_is_linear)
+    std::int64_t domain_value = 0;
+    std::int64_t sample_count = 0;
+
+    if (_table)
     {
         if (size >= sizeof(streaming_protocol::linear_payload))
-        {
-            const auto* payload = static_cast<const streaming_protocol::linear_payload *>(data);
-            _value_index = boost::endian::little_to_native(payload->sample_index);
-            _highest_linked_value_index = _value_index;
-            _linear_value = boost::endian::little_to_native(payload->value);
-        }
+            _table->update(*static_cast<const streaming_protocol::linear_payload *>(data));
     }
 
-    std::int64_t linear_value = 0;
-
-    if (_domain_signal && _domain_signal->_is_linear)
+    else if (_is_explicit)
     {
-        if (!_is_explicit)
-            _value_index = _domain_signal->_highest_linked_value_index;
+        if (_sample_size)
+            sample_count = size / _sample_size;
 
-        linear_value = _domain_signal->_linear_value
-            + (_value_index - _domain_signal->_value_index)
-            * _domain_signal->_linear_start_delta.second;
+        auto domain_table = _domain_table.lock();
+        if (domain_table)
+            domain_value = domain_table->value_at(_value_index);
+
+        _value_index += sample_count;
+
+        if (domain_table)
+            domain_table->drive_to(_value_index);
     }
 
-    std::size_t sample_count = 0;
-    if (_sample_size && !_is_linear)
-        sample_count = size / _sample_size;
+    else
+    {
+        if (size >= _sample_size)
+        {
+            sample_count = 1;
+            size = _sample_size;
+        }
 
-    on_data_received(linear_value, sample_count, data, size);
+        if (auto domain_table = _domain_table.lock(); domain_table)
+            domain_value = domain_table->driven_value();
+    }
 
-    if (_sample_size && _is_explicit)
-        _value_index += size / _sample_size;
-
-    if (_is_explicit && _domain_signal && _value_index > _domain_signal->_highest_linked_value_index)
-        _domain_signal->_highest_linked_value_index = _value_index;
+    on_data_received(
+        domain_value,
+        sample_count,
+        data,
+        size);
 }
 
 void wss::detail::remote_signal_impl::handle_metadata(
@@ -138,30 +145,40 @@ void wss::detail::remote_signal_impl::handle_signal(
     const nlohmann::json& params)
 {
     _metadata = params;
-
-    std::string table_id = metadata().table_id();
-    if (table_id.empty())
-        _domain_signal.reset();
-    else
-        _domain_signal = on_signal_sought(table_id).value_or(nullptr);
-
-    _is_explicit = metadata().rule() == rule_types::explicit_rule;
-    _is_linear = metadata().rule() == rule_types::linear_rule;
-    _is_constant = metadata().rule() == rule_types::constant_rule;
-    _linear_start_delta = metadata().linear_start_delta();
-    _value_index = metadata().value_index().value_or(_value_index);
-    _highest_linked_value_index = _value_index;
     _sample_size = metadata().sample_size();
 
+    if (_metadata.rule() == rule_types::linear_rule)
+    {
+        if (_table)
+            _table->update(_metadata);
+        else
+            _table = std::make_shared<linear_table>(_metadata);
+    }
+
+    else
+    {
+        _table.reset();
+    }
+
+    _is_explicit = _metadata.rule() == rule_types::explicit_rule;
+    _value_index = _metadata.value_index().value_or(_value_index);
+
+    auto table_id = _metadata.table_id();
+
+    if (!table_id.empty() && table_id != id())
+    {
+        _domain_signal = on_signal_sought(table_id).value_or(nullptr);
+        if (_domain_signal)
+            _domain_table = _domain_signal->_table;
+        else
+            _domain_table.reset();
+    }
+
+    else
+    {
+        _domain_signal.reset();
+        _domain_table.reset();
+    }
+
     on_metadata_changed();
-}
-
-std::int64_t wss::detail::remote_signal_impl::value_index() const noexcept
-{
-    return _value_index;
-}
-
-std::int64_t wss::detail::remote_signal_impl::linear_value() const noexcept
-{
-    return _linear_value;
 }

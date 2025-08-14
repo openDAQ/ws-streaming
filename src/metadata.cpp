@@ -46,21 +46,24 @@ std::string wss::metadata::data_type() const
     return "";
 }
 
-std::pair<std::int64_t, std::int64_t> wss::metadata::linear_start_delta() const
+std::pair<
+    std::optional<std::int64_t>,
+    std::optional<std::int64_t>
+> wss::metadata::linear_start_delta() const
 {
     if (rule() != rule_types::linear_rule)
-        return std::make_pair(0, 0);
+        return std::make_pair(std::nullopt, std::nullopt);
 
     if (auto parameters = _json.value<nlohmann::json>(
             nlohmann::json::json_pointer("/interpretation/rule/parameters"), nullptr);
         parameters.is_object())
     {
-        std::int64_t start = 0;
+        std::optional<std::int64_t> start;
         if (auto element = parameters.value<nlohmann::json>("start", nullptr);
                 element.is_number_integer())
             start = element;
 
-        std::int64_t delta = 0;
+        std::optional<std::int64_t> delta;
         if (auto element = parameters.value<nlohmann::json>("delta", nullptr);
                 element.is_number_integer())
             delta = element;
@@ -68,7 +71,7 @@ std::pair<std::int64_t, std::int64_t> wss::metadata::linear_start_delta() const
         return std::make_pair(start, delta);
     }
 
-    return std::make_pair(0, 0);
+    return std::make_pair(std::nullopt, std::nullopt);
 }
 
 std::string wss::metadata::name() const

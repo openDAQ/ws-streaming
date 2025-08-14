@@ -1,11 +1,13 @@
 #include <algorithm>
+#include <functional>
 #include <string>
 #include <utility>
 
 #include <ws-streaming/local_signal.hpp>
 #include <ws-streaming/detail/local_signal_container.hpp>
+#include <ws-streaming/detail/registered_local_signal.hpp>
 
-std::pair<unsigned, bool>
+std::pair<std::reference_wrapper<wss::detail::registered_local_signal>, bool>
 wss::detail::local_signal_container::add_local_signal(local_signal& signal)
 {
     auto it = std::find_if(
@@ -17,15 +19,19 @@ wss::detail::local_signal_container::add_local_signal(local_signal& signal)
         });
 
     if (it != _signals.end())
-        return std::make_pair(it->first, false);
+        return std::make_pair(
+            std::ref(it->second),
+            false);
 
     unsigned signo = _next_signo++;
-    _signals.emplace(
+    auto result = _signals.emplace(
         std::piecewise_construct,
         std::forward_as_tuple(signo),
         std::forward_as_tuple(signal, signo));
 
-    return std::make_pair(signo, true);
+    return std::make_pair(
+        std::ref(result.first->second),
+        true);
 }
 
 unsigned wss::detail::local_signal_container::remove_local_signal(local_signal& signal)
@@ -51,7 +57,7 @@ void wss::detail::local_signal_container::clear_local_signals()
     _signals.clear();
 }
 
-wss::detail::local_signal_container::local_signal_entry *
+wss::detail::registered_local_signal *
 wss::detail::local_signal_container::find_local_signal(const std::string& id)
 {
     auto it = std::find_if(
@@ -68,7 +74,7 @@ wss::detail::local_signal_container::find_local_signal(const std::string& id)
     return &it->second;
 }
 
-wss::detail::local_signal_container::local_signal_entry *
+wss::detail::registered_local_signal *
 wss::detail::local_signal_container::find_local_signal(unsigned signo)
 {
     auto it = _signals.find(signo);

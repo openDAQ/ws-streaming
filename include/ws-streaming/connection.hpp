@@ -19,6 +19,7 @@
 #include <ws-streaming/detail/command_interface_client.hpp>
 #include <ws-streaming/detail/local_signal_container.hpp>
 #include <ws-streaming/detail/peer.hpp>
+#include <ws-streaming/detail/registered_local_signal.hpp>
 #include <ws-streaming/detail/remote_signal_container.hpp>
 #include <ws-streaming/detail/remote_signal_impl.hpp>
 #include <ws-streaming/detail/semver.hpp>
@@ -238,10 +239,10 @@ namespace wss
                 const boost::system::error_code& ec);
 
             void on_local_signal_metadata_changed(
-                detail::local_signal_container::local_signal_entry& signal);
+                detail::registered_local_signal& signal);
 
             void on_local_signal_data_published(
-                detail::local_signal_container::local_signal_entry& signal,
+                detail::registered_local_signal& signal,
                 std::int64_t domain_value,
                 std::size_t sample_count,
                 const void *data,

@@ -62,9 +62,13 @@ namespace wss
              *
              * @return A pair containing the signal's linear-rule start and delta parameters, in
              *     that order. If the signal does not have a linear rule, or one of the parameters
-             *     is missing in the signal's metadata, zeroes are returned instead.
+             *     is missing in the signal's metadata, std::nullopt is returned in that position
+             *     instead.
              */
-            std::pair<std::int64_t, std::int64_t> linear_start_delta() const;
+            std::pair<
+                std::optional<std::int64_t>,
+                std::optional<std::int64_t>
+            > linear_start_delta() const;
 
             /**
              * Gets the name of the signal.

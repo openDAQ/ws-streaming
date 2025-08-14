@@ -5,7 +5,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
-#include <utility>
 
 #include <boost/signals2/signal.hpp>
 
@@ -108,51 +107,11 @@ namespace wss
             const std::string& id() const noexcept;
 
             /**
-             * Tests whether this signal has a linear data rule. This values is cached by
-             * set_metadata(), and so this member function is more efficient than calling
-             * `metadata().rule()`.
-             *
-             * @return True if this signal has a linear data rule.
-             */
-            bool is_linear() const noexcept;
-
-            /**
-             * Gets the signal's linear-rule start and delta parameters. These values are cached
-             * by set_metadata(), and so this member function is more efficient than calling
-             * `metadata().linear_start_delta()`.
-             *
-             * @return A pair containing the signal's linear-rule start and delta parameters, in
-             *     that order. If the signal does not have a linear rule, or one of the parameters
-             *     is missing in the signal's metadata, zeroes are returned instead.
-             */
-            const std::pair<std::int64_t, std::int64_t> linear_start_delta() const noexcept;
-
-            /**
              * Gets the metadata that describes the signal.
              *
              * @return The metadata that describes the signal.
              */
             const wss::metadata& metadata() const noexcept;
-
-            /**
-             * Gets the current sample index. This represents the total number of samples that the
-             * application has published using the
-             * publish_data(std::int64_t, std::size_t, const void *, std::size_t) overload, and is
-             * updated each time that function is called.
-             *
-             * @return The current sample index.
-             */
-            std::size_t sample_index() const noexcept;
-
-            /**
-             * Gets the global identifier of the associated domain signal, if any. This value is
-             * cached by set_metadata(), and so this member function is more efficient than
-             * calling `metadata().table_id()`.
-             *
-             * @return The global identifier of the associated domain signal, or an empty string
-             *     if no associated domain signal is specified in the signal's metadata.
-             */
-            const std::string& table_id() const noexcept;
 
             /**
              * Tests whether one or more remote peers are subscribed to this signal.
@@ -312,12 +271,8 @@ namespace wss
 
         private:
 
-            std::string _id;
-            bool _is_linear = false;
-            std::pair<std::int64_t, std::int64_t> _linear_start_delta;
-            wss::metadata _metadata;
-            std::string _table_id;
-            std::size_t _sample_index = 0;
-            std::atomic<unsigned> _subscribe_count = 0;
+            std::string             _id;
+            wss::metadata           _metadata;
+            std::atomic<unsigned>   _subscribe_count    = 0;
     };
 }
