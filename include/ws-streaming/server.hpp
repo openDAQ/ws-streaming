@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <list>
 #include <memory>
 #include <set>
@@ -13,6 +14,8 @@
 #include <ws-streaming/listener.hpp>
 #include <ws-streaming/local_signal.hpp>
 #include <ws-streaming/remote_signal.hpp>
+#include <ws-streaming/detail/connected_client.hpp>
+#include <ws-streaming/detail/connected_client_iterator.hpp>
 #include <ws-streaming/detail/http_client_servicer.hpp>
 
 namespace wss
@@ -35,6 +38,12 @@ namespace wss
     class server
     {
         public:
+
+            /**
+             * An iterator type that iterates over the set of connected clients. Such iterators
+             * are returned by the begin() and end() member functions.
+             */
+            typedef detail::connected_client_iterator iterator;
 
             /**
              * Constructs a server object. Asynchronous socket operations will be dispatched using
@@ -109,6 +118,36 @@ namespace wss
              * connection.
              */
             void close();
+
+            /**
+             * Tests if close() has been called on this server. This function is thread-safe, but
+             * there is a potential race condition of this function is not called from the
+             * execution context used to construct the server.
+             *
+             * @return True if close() has been called on this server.
+             */
+            bool closed() { return _closed; }
+
+            /**
+             * Gets the execution context being used for asynchronous I/O operations.
+             *
+             * @param The execution context being used for asynchronous I/O operations.
+             */
+            boost::asio::any_io_executor& executor() { return _executor; }
+
+            /**
+             * Gets an iterator to the first connected client.
+             *
+             * @return An iterator to the first connected client.
+             */
+            iterator begin() noexcept { return iterator{_clients.begin()}; }
+
+            /**
+             * Gets an iterator past the last connected client.
+             *
+             * @return An iterator past the last connected client.
+             */
+            iterator end() noexcept { return iterator{_clients.end()}; }
 
             /**
              * A Boost.Signals2 signal raised when a new connection has been established to the
@@ -244,23 +283,11 @@ namespace wss
                 boost::signals2::scoped_connection on_closed;
             };
 
-            struct connected_client
-            {
-                connected_client(connection_ptr connection)
-                    : connection(connection)
-                {
-                }
-
-                connection_ptr connection;
-                boost::signals2::scoped_connection on_available;
-                boost::signals2::scoped_connection on_unavailable;
-                boost::signals2::scoped_connection on_disconnected;
-            };
-
+            std::atomic<bool> _closed;
             boost::asio::any_io_executor _executor;
             std::list<listener_entry> _listeners;
             std::list<client_entry> _sessions;
-            std::list<connected_client> _clients;
+            std::list<detail::connected_client> _clients;
             std::set<local_signal *> _signals;
             std::uint16_t _command_interface_port = 0;
     };

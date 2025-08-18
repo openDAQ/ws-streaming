@@ -61,6 +61,9 @@ void wss::server::run()
 
 void wss::server::close()
 {
+    if (_closed.exchange(true))
+        return;
+
     for (const auto& listener : _listeners)
         listener.l->stop();
     _listeners.clear();
@@ -116,7 +119,7 @@ nlohmann::json wss::server::on_servicer_command_interface_request(
     auto it = std::find_if(
         _clients.begin(),
         _clients.end(),
-        [&](connected_client& client)
+        [&](detail::connected_client& client)
         {
             return client.connection->local_stream_id() == stream_id;
         });
@@ -206,7 +209,7 @@ void wss::server::on_connection_disconnected(
     connection_ptr connection,
     const boost::system::error_code& ec)
 {
-    _clients.remove_if([&](const connected_client& client)
+    _clients.remove_if([&](const detail::connected_client& client)
     {
         return client.connection == connection;
     });
