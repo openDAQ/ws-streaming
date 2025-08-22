@@ -3,15 +3,16 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <string_view>
 
 #include <boost/asio/any_io_executor.hpp>
 #include <boost/beast/http/message.hpp>
 #include <boost/beast/http/string_body.hpp>
 #include <boost/system/error_code.hpp>
-#include <boost/url.hpp>
 
 #include <ws-streaming/connection.hpp>
 #include <ws-streaming/detail/http_client.hpp>
+#include <ws-streaming/detail/url.hpp>
 
 namespace wss
 {
@@ -54,7 +55,7 @@ namespace wss
              *     the execution context passed to the constructor.
              */
             void async_connect(
-                const boost::urls::url_view& url,
+                std::string_view url,
                 std::function<
                     void(
                         const boost::system::error_code& ec,
@@ -75,12 +76,13 @@ namespace wss
         private:
 
             boost::beast::http::request<boost::beast::http::string_body> create_request(
-                const boost::urls::url_view& url);
+                const detail::url& url);
 
             std::string get_random_key();
 
         private:
 
             std::shared_ptr<detail::http_client> _http_client;
+            boost::asio::any_io_executor _executor;
     };
 }

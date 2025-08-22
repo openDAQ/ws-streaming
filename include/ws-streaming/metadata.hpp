@@ -52,10 +52,18 @@ namespace wss
              * constants for the data types specified by the WebSocket Streaming Protocol
              * specification, but user-defined data types are also allowed.
              *
-             * @return The data type string of the signal, or an empty string if the metadata does
-             *     not specify a data type.
+             * @return The data type string of the signal, or data_types::unknown_t ("unknown") if
+             *     the metadata does not specify a data type.
              */
             std::string data_type() const;
+
+            /**
+             * Gets the endianness of the signal. The wss::endianness namespace contains constants
+             * for the endianness strings specified by the WebSocket Streaming Protocol
+             * specification. User-defined data types are allowed, but probably do not make sense.
+             * If not specified, signal data should be assumed to be little-endian.
+             */
+            std::string endian() const;
 
             /**
              * Gets the signal's linear-rule start and delta parameters.
@@ -118,6 +126,21 @@ namespace wss
              *     if no associated domain signal is specified in the signal's metadata.
              */
             std::string table_id() const;
+
+            /**
+             * For direct TCP protocol devices, calculates the sample interval in terms of the
+             * specified fraction of a second. For WebSocket protocol devices, returns zero.
+             *
+             * @param numerator The numerator of the rational number expressing the portion of a
+             *     second to use as a tick.
+             * @param denominator The denominator of the rational number expressing the portion of
+             *     a second to use as a tick.
+             * @return The sample interval as a count of numerator/denominator seconds, or zero if
+             *     the signal is not a direct TCP protocol signal.
+             */
+            std::uint64_t tcp_signal_rate_ticks(
+                std::uint64_t numerator,
+                std::uint64_t denominator) const;
 
             /**
              * Gets the magnitude of a single tick for linear-rule signals. This value specifies

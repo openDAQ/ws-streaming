@@ -93,7 +93,7 @@ int main(int argc, char *argv[])
     // Try to connect to the server; on_connected() will be called on success/failure.
     wss::client client{ioc.get_executor()};
     client.async_connect(
-        boost::url_view("ws://"s + (argc >= 2 ? argv[1] : "localhost") + ":7414"),
+        "ws://"s + (argc >= 2 ? argv[1] : "localhost") + ":7414",
         std::bind(on_connected,
             std::ref(time_signal),
             std::ref(value_signal),

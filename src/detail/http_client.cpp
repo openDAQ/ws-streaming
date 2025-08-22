@@ -29,7 +29,7 @@ wss::detail::http_client::http_client(
 
 void wss::detail::http_client::async_request(
     const std::string& hostname,
-    std::uint16_t port,
+    const std::string& port,
     boost::beast::http::request<boost::beast::http::string_body>&& request,
     std::function<
         void(
@@ -52,7 +52,7 @@ void wss::detail::http_client::async_request(
 
     _resolver.async_resolve(
         hostname,
-        std::to_string(port),
+        port,
         std::bind(
             &http_client::finish_resolve,
             shared_from_this(),

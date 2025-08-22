@@ -1,4 +1,7 @@
-file(GLOB sources *.cpp)
+set(sources
+    ./test_base64.cpp
+    ./test_semver.cpp
+)
 
 foreach(source ${sources})
 

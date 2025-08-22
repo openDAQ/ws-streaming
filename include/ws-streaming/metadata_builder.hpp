@@ -67,6 +67,18 @@ namespace wss
                 const std::string& type);
 
             /**
+             * Sets the endianness of the signal. The wss::endianness namespace contains constants
+             * for the data types specified by the WebSocket Streaming Protocol specification.
+             * User-defined data types are allowed, but probably do no make sense.
+             *
+             * @param endian The endianness of the signal.
+             *
+             * @return A reference to this object.
+             */
+            metadata_builder& endian(
+                const std::string& endian);
+
+            /**
              * Gives the signal a linear rule with the specified starting point and delta.
              *
              * @param start The initial value of the signal in ticks.
@@ -123,6 +135,15 @@ namespace wss
              */
             metadata_builder& table(
                 const std::string& id);
+
+            /**
+             * For direct TCP protocol devices, sets the signal rate data to the specified JSON.
+             *
+             * @param signal_rate The direct TCP protocol device's `signalRate` specification.
+             *     This value should be a JSON object containing keys `delta` and `samples`.
+             */
+            metadata_builder& tcp_signal_rate(
+                const nlohmann::json& signal_rate);
 
             /**
              * Sets the magnitude of a single tick for linear-rule signals. This value specifies

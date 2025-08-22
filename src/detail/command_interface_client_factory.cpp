@@ -32,11 +32,11 @@ wss::detail::command_interface_client_factory::create_client(
         && interfaces["jsonrpc-http"].contains("port")
         && (interfaces["jsonrpc-http"]["port"].is_string() || interfaces["jsonrpc-http"]["port"].is_number_integer()))
     {
-        std::uint16_t port;
+        std::string port;
         if (interfaces["jsonrpc-http"]["port"].is_number_integer())
-            port = interfaces["jsonrpc-http"]["port"].is_number_integer();
+            port = std::to_string(interfaces["jsonrpc-http"]["port"].is_number_integer());
         else
-            port = std::strtoul(std::string(interfaces["jsonrpc-http"]["port"]).c_str(), nullptr, 10);
+            port = interfaces["jsonrpc-http"]["port"];
 
         return std::make_unique<http_command_interface_client>(
             peer->socket().get_executor(),

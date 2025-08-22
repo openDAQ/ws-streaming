@@ -1,13 +1,78 @@
-file(GLOB_RECURSE sources *.cpp)
-file(GLOB_RECURSE headers ../include/*.hpp)
+set(sources
+    ./client.cpp
+    ./connection.cpp
+    ./detail/command_interface_client_factory.cpp
+    ./detail/http_client.cpp
+    ./detail/http_client_servicer.cpp
+    ./detail/http_command_interface_client.cpp
+    ./detail/in_band_command_interface_client.cpp
+    ./detail/linear_table.cpp
+    ./detail/local_signal_container.cpp
+    ./detail/peer.cpp
+    ./detail/remote_signal_container.cpp
+    ./detail/remote_signal_impl.cpp
+    ./detail/semver.cpp
+    ./detail/streaming_protocol.cpp
+    ./detail/url.cpp
+    ./detail/websocket_protocol.cpp
+    ./dimension_builder.cpp
+    ./local_signal.cpp
+    ./metadata_builder.cpp
+    ./metadata.cpp
+    ./remote_signal.cpp
+    ./server.cpp
+    ./struct_field_builder.cpp
+    ./unit.cpp
+)
+
+set(headers
+    ../include/ws-streaming/client.hpp
+    ../include/ws-streaming/connection.hpp
+    ../include/ws-streaming/data_types.hpp
+    ../include/ws-streaming/detail/base64.hpp
+    ../include/ws-streaming/detail/command_interface_client_factory.hpp
+    ../include/ws-streaming/detail/command_interface_client.hpp
+    ../include/ws-streaming/detail/connected_client.hpp
+    ../include/ws-streaming/detail/connected_client_iterator.hpp
+    ../include/ws-streaming/detail/http_client.hpp
+    ../include/ws-streaming/detail/http_client_servicer.hpp
+    ../include/ws-streaming/detail/http_command_interface_client.hpp
+    ../include/ws-streaming/detail/in_band_command_interface_client.hpp
+    ../include/ws-streaming/detail/json.hpp
+    ../include/ws-streaming/detail/linear_table.hpp
+    ../include/ws-streaming/detail/local_signal_container.hpp
+    ../include/ws-streaming/detail/peer.hpp
+    ../include/ws-streaming/detail/registered_local_signal.hpp
+    ../include/ws-streaming/detail/remote_signal_container.hpp
+    ../include/ws-streaming/detail/remote_signal_impl.hpp
+    ../include/ws-streaming/detail/semver.hpp
+    ../include/ws-streaming/detail/streaming_protocol.hpp
+    ../include/ws-streaming/detail/url.hpp
+    ../include/ws-streaming/detail/websocket_protocol.hpp
+    ../include/ws-streaming/dimension_builder.hpp
+    ../include/ws-streaming/endianness.hpp
+    ../include/ws-streaming/json_rpc_exception.hpp
+    ../include/ws-streaming/listener.hpp
+    ../include/ws-streaming/local_signal.hpp
+    ../include/ws-streaming/metadata_builder.hpp
+    ../include/ws-streaming/metadata.hpp
+    ../include/ws-streaming/quantities.hpp
+    ../include/ws-streaming/remote_signal.hpp
+    ../include/ws-streaming/rule_types.hpp
+    ../include/ws-streaming/server.hpp
+    ../include/ws-streaming/struct_field_builder.hpp
+    ../include/ws-streaming/unit.hpp
+    ../include/ws-streaming/ws-streaming.hpp
+)
 
 add_library(${PROJECT_NAME} ${sources} ${headers})
 add_library(${PROJECT_NAME}::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
 
 set_target_properties(${PROJECT_NAME} PROPERTIES
-    CXX_STANDARD            17
-    CXX_STANDARD_REQUIRED   ON
-    CXX_EXTENSIONS          OFF
+    CXX_STANDARD                17
+    CXX_STANDARD_REQUIRED       ON
+    CXX_EXTENSIONS              OFF
+    POSITION_INDEPENDENT_CODE   ON
 )
 
 target_compile_definitions(
@@ -30,30 +95,16 @@ target_include_directories(
 
 target_link_libraries(${PROJECT_NAME}
     PUBLIC
-        Boost::headers
-        Boost::url
+        Boost::archive
+        Boost::asio
+        Boost::beast
+        Boost::endian
+        Boost::multiprecision
+        Boost::serialization
+        Boost::signals2
+        Boost::uuid
         nlohmann_json::nlohmann_json
 )
-
-if(TARGET Boost::asio)
-    target_link_libraries(${PROJECT_NAME} PUBLIC Boost::asio)
-endif()
-
-if(TARGET Boost::beast)
-    target_link_libraries(${PROJECT_NAME} PUBLIC Boost::beast)
-endif()
-
-if(TARGET Boost::serialization)
-    target_link_libraries(${PROJECT_NAME} PUBLIC Boost::serialization)
-endif()
-
-if(TARGET Boost::signals2)
-    target_link_libraries(${PROJECT_NAME} PUBLIC Boost::signals2)
-endif()
-
-if(TARGET Boost::uuid)
-    target_link_libraries(${PROJECT_NAME} PUBLIC Boost::uuid)
-endif()
 
 if(WS_STREAMING_INSTALL)
 

@@ -4,11 +4,15 @@
 #include <string>
 #include <utility>
 
+#include <boost/multiprecision/cpp_int.hpp>
+
 #include <nlohmann/json.hpp>
 
 #include <ws-streaming/data_types.hpp>
+#include <ws-streaming/endianness.hpp>
 #include <ws-streaming/metadata.hpp>
 #include <ws-streaming/rule_types.hpp>
+#include <ws-streaming/detail/json.hpp>
 
 static std::size_t get_primitive_size(const std::string& type)
 {
@@ -36,6 +40,16 @@ wss::metadata::metadata(const nlohmann::json& json)
 {
 }
 
+std::string wss::metadata::endian() const
+{
+    if (auto endian = _json.value<nlohmann::json>(
+            nlohmann::json::json_pointer("/definition/endian"), nullptr);
+            endian.is_string())
+        return endian;
+
+    return endianness::unknown;
+}
+
 std::string wss::metadata::data_type() const
 {
     if (auto data_type = _json.value<nlohmann::json>(
@@ -43,7 +57,7 @@ std::string wss::metadata::data_type() const
             data_type.is_string())
         return data_type;
 
-    return "";
+    return data_types::unknown_t;
 }
 
 std::pair<
@@ -82,6 +96,51 @@ std::string wss::metadata::name() const
         return name;
 
     return "";
+}
+
+std::uint64_t wss::metadata::tcp_signal_rate_ticks(
+    std::uint64_t numerator,
+    std::uint64_t denominator) const
+{
+    // Direct TCP protocol devices represent time deltas as 96-bit counts of 2^-64 second
+    // intervals. But openDAQ works with 64-bit rationals. We will convert this to a count of
+    // nanoseconds. Note that binary sample rates cannot be exactly represented in this way. We
+    // could support an alternative tick resolution of 2^-30 instead of 10^-9 (nanoseconds) and
+    // select the more accurate one. Howver, the direct TCP protocol devices themselves do not
+    // represent intervals exactly (!) and it is not possible to reliably determine the intended
+    // sample rate in all cases. Therefore we have no choice but to accept small inaccuracies!
+
+    if (!_json.contains("signalRate"))
+        return 0;
+
+    const auto& signal_rate = _json.at("signalRate");
+    if (!signal_rate.is_object())
+        return 0;
+
+    std::uint32_t seconds = detail::json_ptr(signal_rate, "/delta/seconds", std::uint32_t{0});
+    std::uint32_t fraction = detail::json_ptr(signal_rate, "/delta/fraction", std::uint32_t{0});
+    std::uint32_t sub_fraction = detail::json_ptr(signal_rate, "/delta/subFraction", std::uint32_t{0});
+    std::uint32_t samples = detail::json_ptr(signal_rate, "/samples", std::uint32_t{1});
+
+    boost::multiprecision::cpp_int ticks_2_64 = seconds;
+    ticks_2_64 <<= 32;
+    ticks_2_64 += fraction;
+    ticks_2_64 <<= 32;
+    ticks_2_64 += sub_fraction;
+
+    boost::multiprecision::cpp_int two_64 = 1;
+    two_64 <<= 64;
+
+    // This represents half a quantum, and adding this term below causes the resulting value to be
+    // rounded to the nearest integer tick value instead of truncating (rounding down).
+    boost::multiprecision::cpp_rational half{
+        two_64 * numerator,
+        boost::multiprecision::cpp_int{denominator} * 2};
+
+    return static_cast<std::uint64_t>(
+        boost::multiprecision::cpp_rational(
+            ticks_2_64 * denominator + half * samples,
+            two_64 * samples * numerator));
 }
 
 std::string wss::metadata::origin() const

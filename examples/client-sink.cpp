@@ -35,12 +35,12 @@ void on_data_received(
     std::cout << "received " << size << " data byte(s), " << sample_count << " sample(s) with domain value " << domain_value << std::endl;
 }
 
-void on_available(wss::remote_signal_ptr signal)
+void on_available(std::string target_signal_id, wss::remote_signal_ptr signal)
 {
     std::cout << "available signal: " << signal->id() << std::endl;
 
     // Subscribe to the signal with ID "/Value".
-    if (signal->id() == "/Value")
+    if (signal->id() == target_signal_id)
     {
         signal->on_data_received.connect(on_data_received);
         signal->subscribe();
@@ -53,6 +53,7 @@ void on_unavailable(wss::remote_signal_ptr signal)
 }
 
 void on_connected(
+    std::string target_signal_id,
     const boost::system::error_code& ec,
     wss::connection_ptr connection)
 {
@@ -84,25 +85,28 @@ void on_connected(
             _2});
 
     // Call on_available when any signal becomes available from the server.
-    connection->on_available.connect(on_available);
+    connection->on_available.connect(std::bind(on_available, target_signal_id, _1));
     connection->on_unavailable.connect(on_unavailable);
 }
 
 int main(int argc, char *argv[])
 {
-    // Allow the hostname/IP to be specified as the first argument, defaulting to "localhost."
-    std::string hostname = "localhost";
+    // Allow the URL to be specified as the first argument.
+    std::string url = "ws://localhost:7414";
     if (argc >= 2)
-        hostname = argv[1];
+        url = argv[1];
+
+    // Allow the signal name to be specified as the second argument.
+    std::string target_signal_id = "/Value";
+    if (argc >= 3)
+        target_signal_id = argv[2];
 
     // Set up a single-threaded Boost.Asio execution context.
     boost::asio::io_context ioc{1};
 
     // Try to connect to the server; on_connected() will be called on success/failure.
     wss::client client{ioc.get_executor()};
-    client.async_connect(
-        "ws://" + hostname + ":7414",
-        on_connected);
+    client.async_connect(url, std::bind(on_connected, target_signal_id, _1, _2));
 
     ioc.run();
 }

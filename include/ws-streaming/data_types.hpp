@@ -1,8 +1,5 @@
 #pragma once
 
-#include <cstddef>
-#include <string>
-
 namespace wss
 {
     /**
@@ -11,6 +8,7 @@ namespace wss
      */
     namespace data_types
     {
+        static constexpr const char *unknown_t = "unknown"; /**< Signal data is of an unknown type. */
         static constexpr const char *int8_t = "int8";       /**< Signals are 8-bit signed integers. */
         static constexpr const char *int16_t = "int16";     /**< Signals are 16-bit signed integers. */
         static constexpr const char *int32_t = "int32";     /**< Signals are 32-bit signed integers. */

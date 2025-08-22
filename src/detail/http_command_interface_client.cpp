@@ -22,7 +22,7 @@
 wss::detail::http_command_interface_client::http_command_interface_client(
         boost::asio::any_io_executor executor,
         const std::string& hostname,
-        const std::uint16_t port,
+        const std::string& port,
         const std::string& http_method,
         const std::string& path,
         const std::string& version)

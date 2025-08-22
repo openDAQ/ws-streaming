@@ -24,7 +24,7 @@ namespace wss::detail
             http_command_interface_client(
                 boost::asio::any_io_executor executor,
                 const std::string& hostname,
-                const std::uint16_t port,
+                const std::string& port,
                 const std::string& http_method,
                 const std::string& path,
                 const std::string& version);
@@ -50,7 +50,7 @@ namespace wss::detail
 
             boost::asio::any_io_executor _executor;
             std::string _hostname;
-            std::uint16_t _port;
+            std::string _port;
             std::string _http_method;
             std::string _path;
             std::string _version;

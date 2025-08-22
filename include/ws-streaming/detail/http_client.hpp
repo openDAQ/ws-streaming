@@ -51,7 +51,7 @@ namespace wss::detail
              * Each request opens a new socket; keepalive is not supported.
              *
              * @param hostname The hostname or IP address of the HTTP server.
-             * @param port The TCP port number of the HTTP server.
+             * @param port The TCP port number or well-known port name of the HTTP server.
              * @param request A populated HTTP request object. The request object should not be
              *     "prepared"; i.e., do not call prepare_payload(). This function will add
              *     additional headers, such as `User-Agent`, to the request.
@@ -63,7 +63,7 @@ namespace wss::detail
              */
             void async_request(
                 const std::string& hostname,
-                std::uint16_t port,
+                const std::string& port,
                 boost::beast::http::request<boost::beast::http::string_body>&& request,
                 std::function<
                     void(
