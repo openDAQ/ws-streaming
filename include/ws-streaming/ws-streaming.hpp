@@ -4,6 +4,7 @@
 #include <ws-streaming/connection.hpp>
 #include <ws-streaming/data_types.hpp>
 #include <ws-streaming/dimension_builder.hpp>
+#include <ws-streaming/endianness.hpp>
 #include <ws-streaming/json_rpc_exception.hpp>
 #include <ws-streaming/listener.hpp>
 #include <ws-streaming/local_signal.hpp>

@@ -65,6 +65,14 @@ wss::metadata_builder& wss::metadata_builder::data_type(
     return *this;
 }
 
+wss::metadata_builder& wss::metadata_builder::endian(
+    const std::string& endian)
+{
+    _metadata["definition"]["endian"] = endian;
+
+    return *this;
+}
+
 wss::metadata_builder& wss::metadata_builder::linear_rule(
     std::int64_t start,
     std::int64_t delta)
@@ -123,6 +131,13 @@ wss::metadata_builder& wss::metadata_builder::table(
 {
     _metadata["tableId"] = id;
 
+    return *this;
+}
+
+wss::metadata_builder& wss::metadata_builder::tcp_signal_rate(
+    const nlohmann::json& sample_rate)
+{
+    _metadata["signalRate"] = sample_rate;
     return *this;
 }
 

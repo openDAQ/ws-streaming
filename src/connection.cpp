@@ -27,9 +27,10 @@ using namespace std::placeholders;
 
 wss::connection::connection(
         boost::asio::ip::tcp::socket&& socket,
-        bool is_client)
+        bool is_client,
+        bool use_tcp_protocol)
     : _is_client{is_client}
-    , _peer{std::make_shared<detail::peer>(std::move(socket), is_client)}
+    , _peer{std::make_shared<detail::peer>(std::move(socket), is_client, use_tcp_protocol)}
     , _local_stream_id{_peer->socket().remote_endpoint().address().to_string()
         + ":" + std::to_string(_peer->socket().remote_endpoint().port())}
 {
@@ -384,10 +385,18 @@ void wss::connection::handle_init(
 void wss::connection::handle_available(
     const nlohmann::json& params)
 {
-    if (!params.is_object() || !params.contains("signalIds") || !params["signalIds"].is_array())
+    nlohmann::json array = nullptr;
+
+    if (params.is_object() && params.contains("signalIds") && params["signalIds"].is_array())
+        array = params["signalIds"];
+
+    else if (params.is_array())
+        array = params;
+
+    if (!array.is_array())
         return;
 
-    for (const auto& id : params["signalIds"])
+    for (const auto& id : array)
     {
         if (!id.is_string())
             continue;
@@ -413,12 +422,14 @@ void wss::connection::handle_subscribe(
     unsigned signo,
     const nlohmann::json& params)
 {
-    if (!params.is_object()
-            || !params.contains("signalId")
-            || !params["signalId"].is_string())
-        return;
+    std::string signal_id;
 
-    auto *entry = detail::remote_signal_container::find_remote_signal(static_cast<std::string>(params["signalId"]));
+    if (params.is_object() && params.contains("signalId") && params["signalId"].is_string())
+        signal_id = params["signalId"];
+    else if (params.is_array() && params.size() > 0 && params[0].is_string())
+        signal_id = params[0];
+
+    auto *entry = detail::remote_signal_container::find_remote_signal(static_cast<std::string>(signal_id));
     if (!entry)
         return;
 
@@ -437,12 +448,18 @@ void wss::connection::handle_unsubscribe(
 void wss::connection::handle_unavailable(
     const nlohmann::json& params)
 {
-    if (!params.is_object()
-            || !params.contains("signalIds")
-            || !params["signalIds"].is_array())
+    nlohmann::json array = nullptr;
+
+    if (params.is_object() && params.contains("signalIds") && params["signalIds"].is_array())
+        array = params["signalIds"];
+
+    else if (params.is_array())
+        array = params;
+
+    if (!array.is_array())
         return;
 
-    for (const auto& id : params["signalIds"])
+    for (const auto& id : array)
     {
         if (!id.is_string())
             continue;

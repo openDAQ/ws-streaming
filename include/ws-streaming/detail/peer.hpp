@@ -70,6 +70,8 @@ namespace wss::detail
              * @param is_client True if this object should act as a client. This determines
              *     whether transmitted WebSocket frames are masked according to section 5.3 of RFC
              *     6455. The masking feature is not currently implemented.
+             * @param use_tcp_protocol True to use the direct TCP protocol instead of the
+             *     WebSocket-based protocol.
              * @param rx_buffer_size The desired size of the receive buffer. The receive buffer
              *     does not grow, so this value sets an upper bound on the size of frames the peer
              *     can receive: larger frames will result in an error and cause the connection to
@@ -90,6 +92,7 @@ namespace wss::detail
             peer(
                 boost::asio::ip::tcp::socket&& socket,
                 bool is_client,
+                bool use_tcp_protocol = false,
                 std::size_t rx_buffer_size = 1024 * 1024,
                 std::size_t tx_buffer_size = 32 * 1024 * 1024);
 
@@ -237,6 +240,8 @@ namespace wss::detail
             void finish_wait_tx(const boost::system::error_code& wait_ec);
 
             void process_buffer();
+            void process_buffer_tcp();
+            void process_buffer_ws();
 
             void process_websocket_frame(
                 const detail::websocket_protocol::decoded_header& header,
@@ -244,7 +249,7 @@ namespace wss::detail
                 std::size_t size,
                 boost::system::error_code& ec);
 
-            void process_packet(const std::uint8_t *data, std::size_t size);
+            std::size_t process_packet(const std::uint8_t *data, std::size_t size);
             void process_data_packet(unsigned signo, const std::uint8_t *data, std::size_t size);
             void process_metadata_packet(unsigned signo, const std::uint8_t *data, std::size_t size);
 
@@ -268,14 +273,24 @@ namespace wss::detail
                     type,
                     calculated_payload_size);
 
-                send_websocket_frame(
-                    detail::websocket_protocol::opcodes::BINARY,
-                    boost::beast::buffers_cat(
-                        boost::asio::buffer(
-                            streaming_header.data(),
-                            streaming_header_size),
-                        payload),
-                    streaming_header_size + calculated_payload_size);
+                if (_use_tcp_protocol)
+                    write(
+                        boost::beast::buffers_cat(
+                            boost::asio::buffer(
+                                streaming_header.data(),
+                                streaming_header_size),
+                            payload),
+                        streaming_header_size + calculated_payload_size,
+                        false);
+                else
+                    send_websocket_frame(
+                        detail::websocket_protocol::opcodes::BINARY,
+                        boost::beast::buffers_cat(
+                            boost::asio::buffer(
+                                streaming_header.data(),
+                                streaming_header_size),
+                            payload),
+                        streaming_header_size + calculated_payload_size);
             }
 
             template <typename ConstBufferSequence>
@@ -379,6 +394,7 @@ namespace wss::detail
         private:
 
             boost::asio::ip::tcp::socket _socket;
+            bool _use_tcp_protocol = false;
             bool _is_closed = false;
 
             std::vector<std::uint8_t> _rx_buffer;

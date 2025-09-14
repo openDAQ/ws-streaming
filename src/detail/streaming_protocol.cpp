@@ -4,7 +4,10 @@
 #include <ws-streaming/detail/streaming_protocol.hpp>
 
 wss::detail::streaming_protocol::decoded_header
-wss::detail::streaming_protocol::decode_header(const std::uint8_t *data, std::size_t size) noexcept
+wss::detail::streaming_protocol::decode_header(
+    const std::uint8_t *data,
+    std::size_t size,
+    bool use_tcp_protocol) noexcept
 {
     decoded_header header { };
     const std::uint8_t *data_begin = data;
@@ -12,9 +15,19 @@ wss::detail::streaming_protocol::decode_header(const std::uint8_t *data, std::si
     if (size < sizeof(std::uint32_t))
         return header;
 
-    header.type = data[3] >> 4;
-    header.signo = ((data[2] & 0xFu) << 16) | (data[1] << 8) | data[0];
-    header.payload_size = ((data[3] & 0xFu) << 4) | (data[2] >> 4);
+    if (use_tcp_protocol)
+    {
+        header.type = data[0] >> 4;
+        header.signo = ((data[1] & 0xFu) << 16) | (data[2] << 8) | data[3];
+        header.payload_size = ((data[0] & 0xFu) << 4) | (data[1] >> 4);
+    }
+
+    else
+    {
+        header.type = data[3] >> 4;
+        header.signo = ((data[2] & 0xFu) << 16) | (data[1] << 8) | data[0];
+        header.payload_size = ((data[3] & 0xFu) << 4) | (data[2] >> 4);
+    }
 
     data += sizeof(std::uint32_t);
     size -= sizeof(std::uint32_t);
@@ -23,7 +36,12 @@ wss::detail::streaming_protocol::decode_header(const std::uint8_t *data, std::si
     {
         if (size < sizeof(std::uint32_t))
             return header;
-        header.payload_size = (data[3] << 24) | (data[2] << 16) | (data[1] << 8) | data[0];
+
+        if (use_tcp_protocol)
+            header.payload_size = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
+        else
+            header.payload_size = (data[3] << 24) | (data[2] << 16) | (data[1] << 8) | data[0];
+
         data += sizeof(std::uint32_t);
         size -= sizeof(std::uint32_t);
     }

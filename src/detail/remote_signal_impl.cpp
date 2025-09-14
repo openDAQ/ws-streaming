@@ -2,12 +2,16 @@
 #include <string>
 
 #include <boost/endian/conversion.hpp>
+#include <boost/multiprecision/cpp_int.hpp>
 
 #include <nlohmann/json.hpp>
 
 #include <ws-streaming/data_types.hpp>
+#include <ws-streaming/endianness.hpp>
+#include <ws-streaming/metadata_builder.hpp>
 #include <ws-streaming/remote_signal.hpp>
 #include <ws-streaming/rule_types.hpp>
+#include <ws-streaming/detail/json.hpp>
 #include <ws-streaming/detail/remote_signal_impl.hpp>
 #include <ws-streaming/detail/streaming_protocol.hpp>
 
@@ -43,7 +47,16 @@ void wss::detail::remote_signal_impl::handle_data(
     std::int64_t domain_value = 0;
     std::int64_t sample_count = 0;
 
-    if (_table)
+    if (_tcp_delta)
+    {
+        if (_sample_size)
+            sample_count = size / _sample_size;
+
+        domain_value = _tcp_time;
+        _tcp_time += _tcp_delta * sample_count;
+    }
+
+    else if (_table)
     {
         if (size >= sizeof(streaming_protocol::linear_payload))
             _table->update(*static_cast<const streaming_protocol::linear_payload *>(data));
@@ -95,6 +108,15 @@ void wss::detail::remote_signal_impl::handle_metadata(
 
     else if (method == "signal")
         handle_signal(params);
+
+    else if (method == "signalRate")
+        handle_signal_rate(params);
+
+    else if (method == "data")
+        handle_data(params);
+
+    else if (method == "time")
+        handle_time(params);
 }
 
 void wss::detail::remote_signal_impl::detach()
@@ -181,4 +203,42 @@ void wss::detail::remote_signal_impl::handle_signal(
     }
 
     on_metadata_changed();
+}
+
+void wss::detail::remote_signal_impl::handle_signal_rate(
+    const nlohmann::json& params)
+{
+    _metadata = metadata_builder{from_json, _metadata.json()}
+        .tcp_signal_rate(params)
+        .build();
+
+    _tcp_delta = _metadata.tcp_signal_rate_ticks(1, 1000000000);
+
+    on_metadata_changed();
+}
+
+void wss::detail::remote_signal_impl::handle_data(
+    const nlohmann::json& params)
+{
+    _metadata = metadata_builder{from_json, _metadata.json()}
+        .data_type(json_ptr<std::string>(params, "/valueType", data_types::unknown_t))
+        .endian(json_ptr<std::string>(params, "/endian", endianness::unknown))
+        .build();
+
+    _sample_size = metadata().sample_size();
+
+    on_metadata_changed();
+}
+
+void wss::detail::remote_signal_impl::handle_time(
+    const nlohmann::json& params)
+{
+    std::uint32_t seconds = detail::json_ptr(params, "/stamp/seconds", std::uint32_t{0});
+    std::uint32_t fraction = detail::json_ptr(params, "/stamp/fraction", std::uint32_t{0});
+
+    boost::multiprecision::cpp_int two_31 = 1;
+    two_31 <<= 31;
+
+    boost::multiprecision::cpp_rational y{two_31 + fraction, two_31 * 2};
+    _tcp_time = static_cast<std::uint64_t>((y + seconds + 946684800) * 1000000000);
 }

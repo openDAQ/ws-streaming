@@ -47,6 +47,9 @@ namespace wss::detail
             void handle_subscribe();
             void handle_unsubscribe();
             void handle_signal(const nlohmann::json& params);
+            void handle_signal_rate(const nlohmann::json& params);
+            void handle_data(const nlohmann::json& params);
+            void handle_time(const nlohmann::json& params);
 
         private:
 
@@ -60,5 +63,8 @@ namespace wss::detail
             bool _is_explicit = false;
             std::size_t _sample_size = 0;
             std::int64_t _value_index = 0;
+
+            std::uint64_t _tcp_delta = 0;
+            std::uint64_t _tcp_time = 0;
     };
 }

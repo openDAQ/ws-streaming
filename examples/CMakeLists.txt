@@ -1,4 +1,12 @@
-file(GLOB sources *.cpp)
+set(sources
+    ./can-sink.cpp
+    ./can-source.cpp
+    ./client-sink.cpp
+    ./client-source.cpp
+    ./lazy-publish.cpp
+    ./server-sink.cpp
+    ./server-source.cpp
+)
 
 foreach(source ${sources})
 

@@ -56,10 +56,13 @@ namespace wss
              *     greeting information immediately. A client only transmits greeting information
              *     after the server has indicated a version number high enough to support
              *     symmetric connections.
+             * @param use_tcp_protocol True to use the direct TCP protocol instead of a WebSocket
+             *     connection.
              */
             connection(
                 boost::asio::ip::tcp::socket&& socket,
-                bool is_client);
+                bool is_client,
+                bool use_tcp_protocol = false);
 
             /**
              * Destroys a connection object.
