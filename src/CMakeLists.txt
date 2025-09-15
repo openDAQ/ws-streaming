@@ -22,6 +22,8 @@ set(sources
     ./remote_signal.cpp
     ./server.cpp
     ./struct_field_builder.cpp
+    ./struct_field_dimension.cpp
+    ./struct_field.cpp
     ./unit.cpp
 )
 
@@ -61,6 +63,8 @@ set(headers
     ../include/ws-streaming/rule_types.hpp
     ../include/ws-streaming/server.hpp
     ../include/ws-streaming/struct_field_builder.hpp
+    ../include/ws-streaming/struct_field_dimension.hpp
+    ../include/ws-streaming/struct_field.hpp
     ../include/ws-streaming/unit.hpp
     ../include/ws-streaming/ws-streaming.hpp
 )

@@ -4,9 +4,11 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include <nlohmann/json.hpp>
 
+#include <ws-streaming/struct_field.hpp>
 #include <ws-streaming/unit.hpp>
 
 namespace wss
@@ -118,6 +120,30 @@ namespace wss
              *     user-defined.
              */
             std::size_t sample_size() const;
+
+            /**
+             * Populates and returns a container with the set of structure fields defined.
+             *
+             * @tparam Container A container type which can be default-constructed and which has
+             *     an emplace_back() member function.
+             *
+             * @return The set of fields defined, or an empty (default-constructed) collection if
+             *     there are no defined structure fields in this metadata.
+             */
+            template <typename Container = std::vector<struct_field>>
+            Container struct_fields() const
+            {
+                Container container;
+
+                if (_json.contains("definition")
+                        && _json["definition"].is_object()
+                        && _json["definition"].contains("struct")
+                        && _json["definition"]["struct"].is_array())
+                    for (const auto& field : _json["definition"]["struct"])
+                        container.emplace_back(field);
+
+                return container;
+            }
 
             /**
              * Gets the global identifier of the associated domain signal, if any.

@@ -13,5 +13,7 @@
 #include <ws-streaming/remote_signal.hpp>
 #include <ws-streaming/rule_types.hpp>
 #include <ws-streaming/server.hpp>
+#include <ws-streaming/struct_field.hpp>
 #include <ws-streaming/struct_field_builder.hpp>
+#include <ws-streaming/struct_field_dimension.hpp>
 #include <ws-streaming/unit.hpp>
