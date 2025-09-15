@@ -42,20 +42,22 @@ wss::metadata::metadata(const nlohmann::json& json)
 
 std::string wss::metadata::endian() const
 {
-    if (auto endian = _json.value<nlohmann::json>(
-            nlohmann::json::json_pointer("/definition/endian"), nullptr);
-            endian.is_string())
-        return endian;
+    if (_json.contains("definition")
+            && _json["definition"].is_object()
+            && _json["definition"].contains("endian")
+            && _json["definition"]["endian"].is_string())
+        return _json["definition"]["endian"];
 
     return endianness::unknown;
 }
 
 std::string wss::metadata::data_type() const
 {
-    if (auto data_type = _json.value<nlohmann::json>(
-            nlohmann::json::json_pointer("/definition/dataType"), nullptr);
-            data_type.is_string())
-        return data_type;
+    if (_json.contains("definition")
+            && _json["definition"].is_object()
+            && _json["definition"].contains("dataType")
+            && _json["definition"]["dataType"].is_string())
+        return _json["definition"]["dataType"];
 
     return data_types::unknown_t;
 }
@@ -68,18 +70,23 @@ std::pair<
     if (rule() != rule_types::linear_rule)
         return std::make_pair(std::nullopt, std::nullopt);
 
-    if (auto parameters = _json.value<nlohmann::json>(
-            nlohmann::json::json_pointer("/interpretation/rule/parameters"), nullptr);
-        parameters.is_object())
+    if (_json.contains("interpretation")
+        && _json["interpretation"].is_object()
+        && _json["interpretation"].contains("rule")
+        && _json["interpretation"]["rule"].is_object()
+        && _json["interpretation"]["rule"].contains("parameters")
+        && _json["interpretation"]["rule"]["parameters"].is_object())
     {
+        const auto& parameters = _json["interpretation"]["rule"]["parameters"];
+
         std::optional<std::int64_t> start;
         if (auto element = parameters.value<nlohmann::json>("start", nullptr);
-                element.is_number_integer())
+                element.is_number())
             start = element;
 
         std::optional<std::int64_t> delta;
         if (auto element = parameters.value<nlohmann::json>("delta", nullptr);
-                element.is_number_integer())
+                element.is_number())
             delta = element;
 
         return std::make_pair(start, delta);
@@ -90,10 +97,11 @@ std::pair<
 
 std::string wss::metadata::name() const
 {
-    if (auto name = _json.value<nlohmann::json>(
-            nlohmann::json::json_pointer("/definition/name"), nullptr);
-            name.is_string())
-        return name;
+    if (_json.contains("definition")
+            && _json["definition"].is_object()
+            && _json["definition"].contains("name")
+            && _json["definition"]["name"].is_string())
+        return _json["definition"]["name"];
 
     return "";
 }
@@ -145,10 +153,17 @@ std::uint64_t wss::metadata::tcp_signal_rate_ticks(
 
 std::string wss::metadata::origin() const
 {
-    if (auto origin = _json.value<nlohmann::json>(
-            nlohmann::json::json_pointer("/definition/origin"), nullptr);
-            origin.is_string())
-        return origin;
+    if (_json.contains("definition")
+            && _json["definition"].is_object()
+            && _json["definition"].contains("origin")
+            && _json["definition"]["origin"].is_string())
+        return _json["definition"]["origin"];
+
+    if (_json.contains("interpretation")
+            && _json["interpretation"].is_object()
+            && _json["interpretation"].contains("origin")
+            && _json["interpretation"]["origin"].is_string())
+        return _json["interpretation"]["origin"];
 
     return "";
 }
@@ -156,10 +171,13 @@ std::string wss::metadata::origin() const
 std::optional<std::pair<double, double>>
 wss::metadata::range() const
 {
-    if (auto range = _json.value<nlohmann::json>(
-        nlohmann::json::json_pointer("/definition/range"), nullptr);
-        range.is_object())
+    if (_json.contains("definition")
+        && _json["definition"].is_object()
+        && _json["definition"].contains("range")
+        && _json["definition"]["range"].is_object())
     {
+        const auto& range = _json["definition"]["range"];
+
         double low = 0, high = 0;
 
         if (range.contains("low") && range["low"].is_number())
@@ -176,10 +194,11 @@ wss::metadata::range() const
 
 std::string wss::metadata::rule() const
 {
-    if (auto rule = _json.value<nlohmann::json>(
-            nlohmann::json::json_pointer("/definition/rule"), nullptr);
-            rule.is_string())
-        return rule;
+    if (_json.contains("definition")
+            && _json["definition"].is_object()
+            && _json["definition"].contains("rule")
+            && _json["definition"]["rule"].is_string())
+        return _json["definition"]["rule"];
 
     return rule_types::explicit_rule;
 }
@@ -192,10 +211,13 @@ std::size_t wss::metadata::sample_size() const
 
     if (!size && type == data_types::struct_t)
     {
-        if (auto struct_array = _json.value<nlohmann::json>(
-            nlohmann::json::json_pointer("/definition/struct"), nullptr);
-            struct_array.is_array())
+        if (_json.contains("definition")
+            && _json["definition"].is_object()
+            && _json["definition"].contains("struct")
+            && _json["definition"]["struct"].is_array())
         {
+            const auto& struct_array = _json["definition"]["struct"];
+
             for (const auto& field : struct_array)
             {
                 if (!field.is_object())
@@ -205,10 +227,15 @@ std::size_t wss::metadata::sample_size() const
 
                 std::size_t field_size = get_primitive_size(field["dataType"]);
 
-                if (auto linear = field.value<nlohmann::json>(
-                    nlohmann::json::json_pointer("/dimensions/0/linear"), nullptr);
-                    linear.is_object())
+                if (field.contains("dimensions")
+                    && field["dimensions"].is_array()
+                    && field["dimensions"].size() >= 1
+                    && field["dimensions"][0].is_object()
+                    && field["dimensions"][0].contains("linear")
+                    && field["dimensions"][0]["linear"].is_object())
                 {
+                    const auto& linear = field["dimensions"][0]["linear"];
+
                     std::size_t count = 1;
                     if (linear.contains("size") && linear["size"].is_number_integer())
                         count = linear["size"];
@@ -235,10 +262,13 @@ std::string wss::metadata::table_id() const
 std::optional<std::pair<std::uint64_t, std::uint64_t>>
 wss::metadata::tick_resolution() const
 {
-    if (auto resolution = _json.value<nlohmann::json>(
-        nlohmann::json::json_pointer("/definition/resolution"), nullptr);
-        resolution.is_object())
+    if (_json.contains("definition")
+        && _json["definition"].is_object()
+        && _json["definition"].contains("resolution")
+        && _json["definition"]["resolution"].is_object())
     {
+        const auto& resolution = _json["definition"]["resolution"];
+
         std::uint64_t numerator = 1, denominator = 1;
 
         if (resolution.contains("num") && resolution["num"].is_number_integer())
@@ -255,10 +285,13 @@ wss::metadata::tick_resolution() const
 
 std::optional<wss::unit> wss::metadata::unit() const
 {
-    if (auto unit = _json.value<nlohmann::json>(
-        nlohmann::json::json_pointer("/interpretation/unit"), nullptr);
-        unit.is_object())
+    if (_json.contains("interpretation")
+        && _json["interpretation"].is_object()
+        && _json["interpretation"].contains("unit")
+        && _json["interpretation"]["unit"].is_object())
     {
+        const auto& unit = _json["interpretation"]["unit"];
+
         int id = -1;
         std::string name, quantity, symbol;
 
