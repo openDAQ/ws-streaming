@@ -7,6 +7,7 @@
 #include <boost/asio/any_io_executor.hpp>
 #include <boost/beast/core/flat_buffer.hpp>
 #include <boost/beast/core/tcp_stream.hpp>
+#include <boost/beast/http.hpp>
 #include <boost/beast/http/error.hpp>
 #include <boost/beast/http/field.hpp>
 #include <boost/beast/http/message.hpp>
@@ -85,8 +86,6 @@ void wss::detail::http_command_interface_client::async_request(
 
             catch (const nlohmann::json::exception& ex)
             {
-                // @todo XXX TODO need better error code
-                return handler(boost::beast::http::error::unexpected_body, nullptr);
             }
 
             handler({}, response_json);
