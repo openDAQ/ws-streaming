@@ -289,6 +289,7 @@ namespace wss
             std::list<client_entry> _sessions;
             std::list<detail::connected_client> _clients;
             std::set<local_signal *> _signals;
+            std::list<local_signal *> _ordered_signals;
             std::uint16_t _command_interface_port = 0;
     };
 }

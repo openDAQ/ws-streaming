@@ -82,15 +82,21 @@ void wss::server::close()
 void wss::server::add_local_signal(local_signal& signal)
 {
     if (_signals.emplace(&signal).second)
+    {
+        _ordered_signals.push_back(&signal);
         for (const auto& c : _clients)
             c.connection->add_local_signal(signal);
+    }
 }
 
 void wss::server::remove_local_signal(local_signal& signal)
 {
     if (_signals.erase(&signal))
+    {
+        _ordered_signals.remove(&signal);
         for (const auto& c : _clients)
             c.connection->remove_local_signal(signal);
+    }
 }
 
 void wss::server::on_listener_accept(
@@ -150,7 +156,7 @@ void wss::server::on_servicer_websocket_upgrade(
                 { "port", std::to_string(_command_interface_port) }
             });
 
-    for (const auto& signal : _signals)
+    for (const auto& signal : _ordered_signals)
         connection->add_local_signal(*signal);
 
     auto& entry = _clients.emplace_back(connection);
