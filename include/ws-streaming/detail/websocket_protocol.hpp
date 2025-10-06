@@ -60,7 +60,7 @@ namespace wss::detail
         inline std::size_t generate_header(std::uint8_t *header,
             unsigned opcode, unsigned flags, std::size_t payload_size)
         {
-            header[0] = opcode | flags;
+            header[0] = static_cast<std::uint8_t>(opcode | flags);
             std::uint64_t payload_size_64 = payload_size;
 
             if (payload_size <= 125)
