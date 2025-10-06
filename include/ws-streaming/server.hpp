@@ -283,7 +283,7 @@ namespace wss
                 boost::signals2::scoped_connection on_closed;
             };
 
-            std::atomic<bool> _closed;
+            std::atomic<bool> _closed = false;
             boost::asio::any_io_executor _executor;
             std::list<listener_entry> _listeners;
             std::list<client_entry> _sessions;
