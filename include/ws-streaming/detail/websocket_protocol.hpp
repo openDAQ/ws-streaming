@@ -65,29 +65,29 @@ namespace wss::detail
 
             if (payload_size <= 125)
             {
-                header[1] = payload_size_64;
+                header[1] = static_cast<std::uint8_t>(payload_size_64);
                 return 2;
             }
 
             else if (payload_size_64 <= 65535)
             {
                 header[1] = 126;
-                header[2] = payload_size_64 >> 8;
-                header[3] = payload_size_64;
+                header[2] = static_cast<std::uint8_t>(payload_size_64 >> 8);
+                header[3] = static_cast<std::uint8_t>(payload_size_64);
                 return 4;
             }
 
             else
             {
                 header[1] = 127;
-                header[2] = payload_size_64 >> 56;
-                header[3] = payload_size_64 >> 48;
-                header[4] = payload_size_64 >> 40;
-                header[5] = payload_size_64 >> 32;
-                header[6] = payload_size_64 >> 24;
-                header[7] = payload_size_64 >> 16;
-                header[8] = payload_size_64 >> 8;
-                header[9] = payload_size_64;
+                header[2] = static_cast<std::uint8_t>(payload_size_64 >> 56);
+                header[3] = static_cast<std::uint8_t>(payload_size_64 >> 48);
+                header[4] = static_cast<std::uint8_t>(payload_size_64 >> 40);
+                header[5] = static_cast<std::uint8_t>(payload_size_64 >> 32);
+                header[6] = static_cast<std::uint8_t>(payload_size_64 >> 24);
+                header[7] = static_cast<std::uint8_t>(payload_size_64 >> 16);
+                header[8] = static_cast<std::uint8_t>(payload_size_64 >> 8);
+                header[9] = static_cast<std::uint8_t>(payload_size_64);
                 return 10;
             }
         }

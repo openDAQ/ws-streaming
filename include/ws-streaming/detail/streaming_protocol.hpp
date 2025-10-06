@@ -2,6 +2,8 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <limits>
+#include <stdexcept>
 
 #include <boost/endian/conversion.hpp>
 
@@ -69,16 +71,22 @@ namespace wss::detail
         {
             if (payload_size < 256)
             {
-                reinterpret_cast<std::uint32_t *>(header)[0] = boost::endian::native_to_little<std::uint32_t>(signo | (payload_size << 20) | (type << 28));
+                reinterpret_cast<std::uint32_t *>(header)[0] = boost::endian::native_to_little<std::uint32_t>(
+                    signo |
+                    (static_cast<unsigned>(payload_size) << 20)
+                    | (type << 28));
                 return sizeof(std::uint32_t);
             }
 
-            else
+            else if (payload_size <= std::numeric_limits<std::uint32_t>::max())
             {
                 reinterpret_cast<std::uint32_t *>(header)[0] = boost::endian::native_to_little<std::uint32_t>(signo | (type << 28));
-                reinterpret_cast<std::uint32_t *>(header)[1] = boost::endian::native_to_little<std::uint32_t>(payload_size);
+                reinterpret_cast<std::uint32_t *>(header)[1] = boost::endian::native_to_little<std::uint32_t>(static_cast<std::uint32_t>(payload_size));
                 return 2 * sizeof(std::uint32_t);
             }
+
+            throw std::runtime_error(
+                "Asked to generate a WebSocket Streaming Protocol packet > 2^32 bytes");
         }
 
         /**
