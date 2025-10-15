@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <functional>
 #include <map>
+#include <memory>
 #include <string>
 #include <utility>
 
@@ -18,12 +19,15 @@ namespace wss::detail
     {
         protected:
 
-            std::pair<std::reference_wrapper<registered_local_signal>, bool> add_local_signal(local_signal& signal);
+            std::pair<std::shared_ptr<registered_local_signal>, bool> add_local_signal(local_signal& signal);
             unsigned remove_local_signal(local_signal& signal);
             void clear_local_signals();
 
-            registered_local_signal *find_local_signal(const std::string& id);
-            registered_local_signal *find_local_signal(unsigned signo);
+            std::shared_ptr<registered_local_signal>
+            find_local_signal(const std::string& id);
+
+            std::shared_ptr<registered_local_signal>
+            find_local_signal(unsigned signo);
 
             auto local_signals()
             {
@@ -32,7 +36,7 @@ namespace wss::detail
 
         private:
 
-            std::map<unsigned, registered_local_signal> _signals;
+            std::map<unsigned, std::shared_ptr<registered_local_signal>> _signals;
             unsigned _next_signo = 1;
     };
 }

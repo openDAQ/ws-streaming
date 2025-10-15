@@ -85,10 +85,10 @@ void wss::connection::add_local_signal(local_signal& signal)
     if (added)
     {
         auto rule = signal.metadata().rule();
-        entry.get().is_explicit = rule == rule_types::explicit_rule;
+        entry->is_explicit = rule == rule_types::explicit_rule;
 
         if (rule == rule_types::linear_rule)
-            entry.get().table = std::make_shared<detail::linear_table>(signal.metadata());
+            entry->table = std::make_shared<detail::linear_table>(signal.metadata());
 
         auto table_id = signal.metadata().table_id();
         if (!table_id.empty() && table_id != signal.id())
@@ -96,8 +96,8 @@ void wss::connection::add_local_signal(local_signal& signal)
             auto domain_entry = find_local_signal(table_id);
             if (domain_entry)
             {
-                entry.get().domain_signo = domain_entry->signo;
-                entry.get().domain_table = domain_entry->table;
+                entry->domain_signo = domain_entry->signo;
+                entry->domain_table = domain_entry->table;
             }
         }
 
@@ -170,8 +170,8 @@ void wss::connection::do_hello()
 
     auto signal_ids = nlohmann::json::array();
 
-    for (const auto& signal : local_signals())
-        signal_ids.emplace_back(signal.signal.id());
+    for (std::shared_ptr<detail::registered_local_signal> signal : local_signals())
+        signal_ids.emplace_back(signal->signal.id());
 
     if (!signal_ids.empty())
         _peer->send_metadata(
@@ -270,19 +270,19 @@ void wss::connection::on_local_signal_metadata_changed(
 }
 
 void wss::connection::on_local_signal_data_published(
-    detail::registered_local_signal& entry,
+    std::shared_ptr<detail::registered_local_signal> entry,
     std::int64_t domain_value,
     std::size_t sample_count,
     const void *data,
     std::size_t size)
 {
-    auto domain_table = entry.domain_table.lock();
+    auto domain_table = entry->domain_table.lock();
 
     if (domain_table)
     {
         std::int64_t index
-            = entry.is_explicit
-                ? entry.value_index
+            = entry->is_explicit
+                ? entry->value_index
                 : domain_table->driven_index();
 
         if (domain_value != domain_table->value_at(index))
@@ -294,19 +294,19 @@ void wss::connection::on_local_signal_data_published(
             payload.value = boost::endian::native_to_little(domain_value);
 
             _peer->send_data(
-                entry.domain_signo,
+                entry->domain_signo,
                 boost::asio::const_buffer{&payload, sizeof(payload)});
         }
     }
 
     _peer->send_data(
-        entry.signo,
+        entry->signo,
         boost::asio::const_buffer{data, size});
 
-    entry.value_index += sample_count;
+    entry->value_index += sample_count;
 
-    if (entry.is_explicit && domain_table)
-        domain_table->drive_to(entry.value_index);
+    if (entry->is_explicit && domain_table)
+        domain_table->drive_to(entry->value_index);
 }
 
 void wss::connection::on_signal_subscribe_requested(
@@ -578,7 +578,7 @@ bool wss::connection::subscribe(
     const std::string& signal_id,
     bool is_explicit)
 {
-    auto *signal = find_local_signal(signal_id);
+    auto signal = find_local_signal(signal_id);
     if (!signal)
         return false;
 
@@ -619,7 +619,7 @@ bool wss::connection::subscribe(
         std::bind(
             &connection::on_local_signal_data_published,
             shared_from_this(),
-            std::ref(*signal),
+            signal,
             _1,
             _2,
             _3,
@@ -638,7 +638,7 @@ bool wss::connection::unsubscribe(
     const std::string& signal_id,
     bool is_explicit)
 {
-    auto *signal = find_local_signal(signal_id);
+    auto signal = find_local_signal(signal_id);
     if (!signal)
         return false;
 

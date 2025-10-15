@@ -245,7 +245,7 @@ namespace wss
                 detail::registered_local_signal& signal);
 
             void on_local_signal_data_published(
-                detail::registered_local_signal& signal,
+                std::shared_ptr<detail::registered_local_signal> signal,
                 std::int64_t domain_value,
                 std::size_t sample_count,
                 const void *data,
