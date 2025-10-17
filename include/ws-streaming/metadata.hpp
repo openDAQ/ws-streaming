@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <map>
 #include <optional>
 #include <string>
 #include <utility>
@@ -66,6 +67,30 @@ namespace wss
              * If not specified, signal data should be assumed to be little-endian.
              */
             std::string endian() const;
+
+            /**
+             * Populates and returns a container with the set of extra metadata for this signal.
+             *
+             * @tparam Container An associative container type which can be default-constructed
+             *     and which has an emplace() member function.
+             *
+             * @return The set of extra metadata fields defined, or an empty (default-constructed)
+             *     collection if there are no defined extra metadata fields in this metadata.
+             */
+            template <typename Container = std::map<std::string, std::string>>
+            Container extra_metadata() const
+            {
+                Container container;
+
+                if (_json.contains("interpretation")
+                        && _json["interpretation"].is_object()
+                        && _json["interpretation"].contains("metadata")
+                        && _json["interpretation"]["metadata"].is_object())
+                    for (const auto& field : _json["interpretation"]["metadata"].items())
+                        container.emplace(field.key(), field.value());
+
+                return container;
+            }
 
             /**
              * Gets the signal's linear-rule start and delta parameters.

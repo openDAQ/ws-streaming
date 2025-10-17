@@ -20,5 +20,6 @@ namespace wss
         static constexpr const char *real32_t = "real32";   /**< Signals are 32-bit floating-point numbers. */
         static constexpr const char *real64_t = "real64";   /**< Signals are 64-bit floating-point numbers. */
         static constexpr const char *struct_t = "struct";   /**< Signals are structure-valued. */
+        static constexpr const char *null_t = "null";       /**< Signals are null-valued (no data). */
     };
 }

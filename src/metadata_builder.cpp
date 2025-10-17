@@ -73,6 +73,17 @@ wss::metadata_builder& wss::metadata_builder::endian(
     return *this;
 }
 
+wss::metadata_builder& wss::metadata_builder::extra_metadata(
+    const std::string& key,
+    const std::string& value)
+{
+    if (!_metadata["interpretation"].contains("metadata") ||
+        !_metadata["interpretation"]["metadata"].is_object())
+    _metadata["interpretation"]["metadata"] = nlohmann::json::object();
+    _metadata["interpretation"]["metadata"][key] = value;
+    return *this;
+}
+
 wss::metadata_builder& wss::metadata_builder::linear_rule(
     std::int64_t start,
     std::int64_t delta)

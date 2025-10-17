@@ -79,6 +79,19 @@ namespace wss
                 const std::string& endian);
 
             /**
+             * Adds a key/value pair to the extra metadata set for the signal. This information is
+             * placed into the 'metadata' key of the 'interpretation' object.
+             *
+             * @param key The key to add.
+             * @param value The value to add.
+             *
+             * @return A reference to this object.
+            */
+            metadata_builder& extra_metadata(
+                const std::string& key,
+                const std::string& value);
+
+            /**
              * Gives the signal a linear rule with the specified starting point and delta.
              *
              * @param start The initial value of the signal in ticks.
