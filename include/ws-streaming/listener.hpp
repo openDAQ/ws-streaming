@@ -6,6 +6,7 @@
 #include <boost/asio/any_io_executor.hpp>
 #include <boost/asio/socket_base.hpp>
 #include <boost/asio/ip/tcp.hpp>
+#include <boost/asio/ip/v6_only.hpp>
 #include <boost/signals2/signal.hpp>
 #include <boost/system/error_code.hpp>
 
@@ -47,6 +48,18 @@ namespace wss
                 acceptor.open(endpoint.protocol(), ec);
                 if (ec)
                     return;
+
+                try
+                {
+                    boost::asio::ip::v6_only option{false};
+                    acceptor.set_option(option);
+                }
+
+                catch (const std::exception& /*ex*/)
+                {
+                    // IPv6-only option not supported. We can ignore this because it means
+                    // the acceptors will always support IPv4 and IPv6, which is what we want.
+                }
 
                 acceptor.set_option(boost::asio::socket_base::reuse_address(true), ec);
 

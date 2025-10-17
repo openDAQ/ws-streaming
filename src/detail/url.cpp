@@ -19,6 +19,11 @@ wss::detail::url::url(std::string_view str)
     _host_address = matches[2];
     _path = matches[4];
 
+    if (_host_address.length() > 2 &&
+        _host_address[0] == '[' &&
+        _host_address[_host_address.length() - 1] == ']')
+        _host_address = _host_address.substr(1, _host_address.length() - 2);
+
     if (!matches[3].str().empty())
         _port_number = std::atoi(matches[3].str().c_str());
 }

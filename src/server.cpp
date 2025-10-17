@@ -27,7 +27,7 @@ void wss::server::add_listener(std::uint16_t port, bool make_command_interface)
     add_listener(
         std::make_shared<listener<>>(
             _executor,
-            boost::asio::ip::tcp::endpoint({}, port)));
+            boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v6(), port)));
 
     if (make_command_interface)
         _command_interface_port = port;
