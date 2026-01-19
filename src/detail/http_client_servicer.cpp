@@ -106,6 +106,13 @@ void wss::detail::http_client_servicer::finish_read(
             boost::beast::http::status::switching_protocols,
             req.version());
 
+        res.set(
+            boost::beast::http::field::server,
+            "ws-streaming/" WS_STREAMING_VERSION_MAJOR
+                "." WS_STREAMING_VERSION_MINOR
+                "." WS_STREAMING_VERSION_PATCH
+                " " BOOST_BEAST_VERSION_STRING);
+
         res.set(boost::beast::http::field::connection, "Upgrade");
         res.set(boost::beast::http::field::upgrade, "websocket");
         res.set(boost::beast::http::field::sec_websocket_accept, response_key);
@@ -170,6 +177,14 @@ void wss::detail::http_client_servicer::finish_read(
             response_json.value());
     }
 
+    else if (req.method() == boost::beast::http::verb::options)
+    {
+        return do_response(
+            req,
+            boost::beast::http::status::no_content,
+            nullptr);
+    }
+
     else
     {
         boost::beast::http::response<boost::beast::http::string_body> res(
@@ -184,6 +199,8 @@ void wss::detail::http_client_servicer::finish_read(
                 " " BOOST_BEAST_VERSION_STRING);
 
         res.keep_alive(req.keep_alive());
+        res.set(boost::beast::http::field::access_control_allow_headers, "*");
+        res.set(boost::beast::http::field::access_control_allow_origin, "*");
         res.prepare_payload();
 
         do_write(
@@ -228,6 +245,8 @@ void wss::detail::http_client_servicer::do_response(
         req.version());
 
     res.keep_alive(req.keep_alive());
+    res.set(boost::beast::http::field::access_control_allow_headers, "*");
+    res.set(boost::beast::http::field::access_control_allow_origin, "*");
 
     if (!response_json.is_null())
     {
