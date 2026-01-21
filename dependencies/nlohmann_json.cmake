@@ -1,4 +1,4 @@
-find_package(nlohmann_json 3.12.0 QUIET GLOBAL)
+find_package(nlohmann_json 3.10.5 QUIET GLOBAL)
 
 if(nlohmann_json_FOUND)
 
@@ -14,7 +14,7 @@ else()
 
         FetchContent_Declare(nlohmann_json
             GIT_REPOSITORY  https://github.com/nlohmann/json
-            GIT_TAG         v3.12.0
+            GIT_TAG         v3.10.5
             GIT_SHALLOW
             OVERRIDE_FIND_PACKAGE
         )
