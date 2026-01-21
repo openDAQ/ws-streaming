@@ -4,6 +4,10 @@ if(nlohmann_json_FOUND)
 
     message(STATUS "Found nlohmann_json ${nlohmann_json_VERSION} at ${nlohmann_json_CONFIG}")
 
+elseif(TARGET nlohmann_json::nlohmann_json)
+
+    message(STATUS "Found nlohmann_json::nlohmann_json as existing target")
+
 else()
 
     message(STATUS "Fetching nlohmann_json...")
