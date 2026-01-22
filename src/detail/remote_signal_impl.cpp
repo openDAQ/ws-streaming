@@ -166,7 +166,7 @@ void wss::detail::remote_signal_impl::handle_unsubscribe()
 void wss::detail::remote_signal_impl::handle_signal(
     const nlohmann::json& params)
 {
-    _metadata = params;
+    _metadata = wss::metadata(params);
     _sample_size = metadata().sample_size();
 
     if (_metadata.rule() == rule_types::linear_rule)
@@ -208,9 +208,10 @@ void wss::detail::remote_signal_impl::handle_signal(
 void wss::detail::remote_signal_impl::handle_signal_rate(
     const nlohmann::json& params)
 {
-    _metadata = metadata_builder{from_json, _metadata.json()}
-        .tcp_signal_rate(params)
-        .build();
+    _metadata = wss::metadata(
+        metadata_builder{from_json, _metadata.json()}
+            .tcp_signal_rate(params)
+            .build());
 
     _tcp_delta = _metadata.tcp_signal_rate_ticks(1, 1000000000);
 
@@ -220,10 +221,11 @@ void wss::detail::remote_signal_impl::handle_signal_rate(
 void wss::detail::remote_signal_impl::handle_data(
     const nlohmann::json& params)
 {
-    _metadata = metadata_builder{from_json, _metadata.json()}
-        .data_type(json_ptr<std::string>(params, "/valueType", data_types::unknown_t))
-        .endian(json_ptr<std::string>(params, "/endian", endianness::unknown))
-        .build();
+    _metadata = wss::metadata(
+        metadata_builder{from_json, _metadata.json()}
+            .data_type(json_ptr<std::string>(params, "/valueType", data_types::unknown_t))
+            .endian(json_ptr<std::string>(params, "/endian", endianness::unknown))
+            .build());
 
     _sample_size = metadata().sample_size();
 
