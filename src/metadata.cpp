@@ -67,32 +67,49 @@ std::pair<
     std::optional<std::int64_t>
 > wss::metadata::linear_start_delta() const
 {
-    if (rule() != rule_types::linear_rule)
-        return std::make_pair(std::nullopt, std::nullopt);
+    std::optional<std::int64_t> start;
+    std::optional<std::int64_t> delta;
 
-    if (_json.contains("interpretation")
-        && _json["interpretation"].is_object()
-        && _json["interpretation"].contains("rule")
-        && _json["interpretation"]["rule"].is_object()
-        && _json["interpretation"]["rule"].contains("parameters")
-        && _json["interpretation"]["rule"]["parameters"].is_object())
+    if (rule() == rule_types::linear_rule)
     {
-        const auto& parameters = _json["interpretation"]["rule"]["parameters"];
+        if (_json.contains("interpretation")
+            && _json["interpretation"].is_object()
+            && _json["interpretation"].contains("rule")
+            && _json["interpretation"]["rule"].is_object()
+            && _json["interpretation"]["rule"].contains("parameters")
+            && _json["interpretation"]["rule"]["parameters"].is_object())
+        {
+            const auto& parameters = _json["interpretation"]["rule"]["parameters"];
 
-        std::optional<std::int64_t> start;
-        if (auto element = parameters.value<nlohmann::json>("start", nullptr);
-                element.is_number())
-            start = element;
+            std::optional<std::int64_t> start;
+            if (auto element = parameters.value<nlohmann::json>("start", nullptr);
+                    element.is_number())
+                start = element;
 
-        std::optional<std::int64_t> delta;
-        if (auto element = parameters.value<nlohmann::json>("delta", nullptr);
-                element.is_number())
-            delta = element;
+            std::optional<std::int64_t> delta;
+            if (auto element = parameters.value<nlohmann::json>("delta", nullptr);
+                    element.is_number())
+                delta = element;
+        }
 
-        return std::make_pair(start, delta);
+        if (_json.contains("definition")
+            && _json["definition"].is_object()
+            && _json["definition"].contains("linear")
+            && _json["definition"]["linear"].is_object())
+        {
+            const auto& linear = _json["definition"]["linear"];
+
+            if (auto element = linear.value<nlohmann::json>("start", nullptr);
+                    element.is_number())
+                start = element;
+
+            if (auto element = linear.value<nlohmann::json>("delta", nullptr);
+                    element.is_number())
+                delta = element;
+        }
     }
 
-    return std::make_pair(std::nullopt, std::nullopt);
+    return std::make_pair(start, delta);
 }
 
 std::string wss::metadata::name() const

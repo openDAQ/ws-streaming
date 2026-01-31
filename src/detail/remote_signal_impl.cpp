@@ -12,6 +12,7 @@
 #include <ws-streaming/remote_signal.hpp>
 #include <ws-streaming/rule_types.hpp>
 #include <ws-streaming/detail/json.hpp>
+#include <ws-streaming/detail/linear_table.hpp>
 #include <ws-streaming/detail/remote_signal_impl.hpp>
 #include <ws-streaming/detail/streaming_protocol.hpp>
 
@@ -145,6 +146,11 @@ void wss::detail::remote_signal_impl::signo(unsigned signo)
     _signo = signo;
 }
 
+const std::shared_ptr<wss::detail::linear_table>& wss::detail::remote_signal_impl::table() const noexcept
+{
+    return _table;
+}
+
 void wss::detail::remote_signal_impl::handle_subscribe()
 {
     if (_is_subscribed)
@@ -189,7 +195,7 @@ void wss::detail::remote_signal_impl::handle_signal(
 
     if (!table_id.empty() && table_id != id())
     {
-        _domain_signal = on_signal_sought(table_id).value_or(nullptr);
+        _domain_signal = on_table_sought(table_id).value_or(nullptr);
         if (_domain_signal)
             _domain_table = _domain_signal->_table;
         else
