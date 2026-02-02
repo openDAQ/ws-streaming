@@ -327,6 +327,28 @@ std::optional<wss::unit> wss::metadata::unit() const
         return wss::unit(id, name, quantity, symbol);
     }
 
+    else if (_json.contains("definition")
+        && _json["definition"].is_object()
+        && _json["definition"].contains("unit")
+        && _json["definition"]["unit"].is_object())
+    {
+        const auto& unit = _json["definition"]["unit"];
+
+        int id = -1;
+        std::string name, quantity, symbol;
+
+        if (unit.contains("unitId") && unit["unitId"].is_number_integer())
+            id = unit["unitId"];
+
+        if (unit.contains("displayName") && unit["displayName"].is_string())
+            name = symbol = unit["displayName"];
+
+        if (unit.contains("quantity") && unit["quantity"].is_string())
+            quantity = unit["quantity"];
+
+        return wss::unit(id, name, quantity, symbol);
+    }
+
     return std::nullopt;
 }
 
