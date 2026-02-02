@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 
 #include <ws-streaming/metadata.hpp>
 #include <ws-streaming/detail/streaming_protocol.hpp>
@@ -27,8 +28,11 @@ namespace wss::detail
 
             std::int64_t driven_index() const noexcept;
 
+            const std::string& id() const noexcept;
+
         private:
 
+            std::string _id;
             std::int64_t _index = 0;
             std::int64_t _value = 0;
             std::int64_t _delta = 0;
