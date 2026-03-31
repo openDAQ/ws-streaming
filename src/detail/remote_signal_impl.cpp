@@ -66,6 +66,8 @@ void wss::detail::remote_signal_impl::handle_data(
     {
         if (_sample_size)
             sample_count = size / _sample_size;
+        else if (_metadata.data_type() == data_types::binary_t)
+            sample_count = 1;
 
         auto domain_table = _domain_table.lock();
         if (domain_table)
