@@ -1,4 +1,5 @@
 #include <cstdint>
+#include <string>
 
 #include <ws-streaming/metadata.hpp>
 #include <ws-streaming/rule_types.hpp>
@@ -15,6 +16,7 @@ wss::detail::linear_table::linear_table(const metadata& metadata)
 void wss::detail::linear_table::update(
     const metadata& metadata)
 {
+    _id = metadata.table_id();
     auto [start, delta] = metadata.linear_start_delta();
 
     _value = start.value_or(_value);
@@ -59,4 +61,9 @@ void wss::detail::linear_table::drive_to(std::int64_t index) noexcept
 std::int64_t wss::detail::linear_table::driven_index() const noexcept
 {
     return _driven_index;
+}
+
+const std::string& wss::detail::linear_table::id() const noexcept
+{
+    return _id;
 }
