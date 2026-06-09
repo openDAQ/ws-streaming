@@ -250,8 +250,42 @@ void wss::detail::http_client_servicer::do_response(
 
     if (!response_json.is_null())
     {
-        res.set(boost::beast::http::field::content_type, "application/json");
-        res.body() = response_json.dump();
+        bool is_success;
+
+        if (response_json.is_array())
+        {
+            is_success = true;
+            for (const auto& entry : response_json)
+            {
+                if (!entry.is_boolean() || entry != true)
+                {
+                    is_success = false;
+                    break;
+                }
+            }
+        }
+
+        else if (response_json.is_boolean())
+        {
+            is_success = response_json == true;
+        }
+
+        else
+        {
+            is_success = false;
+        }
+
+        if (is_success)
+        {
+            res.set(boost::beast::http::field::content_type, "text/plain");
+            res.body() = "Succeeded";
+        }
+
+        else
+        {
+            res.set(boost::beast::http::field::content_type, "application/json");
+            res.body() = response_json.dump();
+        }
     }
 
     do_response(res);
