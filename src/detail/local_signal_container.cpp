@@ -54,6 +54,16 @@ unsigned wss::detail::local_signal_container::remove_local_signal(local_signal& 
 
 void wss::detail::local_signal_container::clear_local_signals()
 {
+    // Manually clean up the connections so that the local_signal objects can be safely
+    // destroyed without leaving dangling pointers in the signal handlers.
+    for (auto& entry : _signals)
+    {
+        auto& signal = entry.second;
+        signal->on_data_published.disconnect();
+        signal->on_metadata_changed.disconnect();
+        signal->holder.close();
+    }
+
     _signals.clear();
 }
 
