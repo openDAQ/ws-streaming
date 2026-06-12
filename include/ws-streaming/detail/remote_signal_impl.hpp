@@ -40,7 +40,9 @@ namespace wss::detail
 
             boost::signals2::signal<void()> on_subscribe_requested;
             boost::signals2::signal<void()> on_unsubscribe_requested;
-            boost::signals2::signal<std::shared_ptr<remote_signal_impl>(const std::string& id)> on_signal_sought;
+            boost::signals2::signal<std::shared_ptr<remote_signal_impl>(const std::string& table_id)> on_table_sought;
+
+            const std::shared_ptr<linear_table>& table() const noexcept;
 
         private:
 
