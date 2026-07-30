@@ -53,11 +53,12 @@ void wss::detail::http_client::async_request(
     _resolver.async_resolve(
         hostname,
         port,
-        std::bind(
-            &http_client::finish_resolve,
-            shared_from_this(),
-            std::placeholders::_1,
-            std::placeholders::_2));
+        [self_weak = weak_from_this()](const boost::system::error_code& ec,
+                    const boost::asio::ip::tcp::resolver::results_type& results)
+        {
+            if (auto self = self_weak.lock())
+                self->finish_resolve(ec, results);
+        });
 }
 
 void wss::detail::http_client::cancel()
@@ -75,10 +76,11 @@ void wss::detail::http_client::finish_resolve(
 
     _stream.async_connect(
         results,
-        std::bind(
-            &http_client::finish_connect,
-            shared_from_this(),
-            std::placeholders::_1));
+        [self_weak = weak_from_this()](const boost::system::error_code& ec, auto /*endpoint*/)
+        {
+            if (auto self = self_weak.lock())
+                self->finish_connect(ec); // finish_connect only takes ec
+        });
 }
 
 void wss::detail::http_client::finish_connect(
@@ -92,10 +94,11 @@ void wss::detail::http_client::finish_connect(
     boost::beast::http::async_write(
         _stream,
         _request,
-        std::bind(
-            &http_client::finish_write,
-            shared_from_this(),
-            std::placeholders::_1));
+        [self_weak = weak_from_this()](const boost::system::error_code& ec, std::size_t /*bytes_transferred*/)
+        {
+            if (auto self = self_weak.lock())
+                self->finish_write(ec);
+        });
 }
 
 void wss::detail::http_client::finish_write(
@@ -110,10 +113,11 @@ void wss::detail::http_client::finish_write(
         _stream,
         _buffer,
         _response,
-        std::bind(
-            &http_client::finish_read,
-            shared_from_this(),
-            std::placeholders::_1));
+        [self_weak = weak_from_this()](const boost::system::error_code& ec, std::size_t /*bytes_transferred*/)
+        {
+            if (auto self = self_weak.lock())
+                self->finish_read(ec);
+        });
 }
 
 void wss::detail::http_client::finish_read(

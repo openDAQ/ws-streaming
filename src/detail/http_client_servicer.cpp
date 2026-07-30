@@ -40,9 +40,10 @@ void wss::detail::http_client_servicer::stop()
 {
     boost::asio::post(
         stream.get_executor(),
-        [self = shared_from_this()]()
+        [self_weak = weak_from_this()]()
         {
-            self->close();
+            if (auto self = self_weak.lock())
+                self->close();
         });
 }
 
@@ -54,11 +55,11 @@ void wss::detail::http_client_servicer::do_read()
         stream,
         buffer,
         req = {},
-        std::bind(
-            &http_client_servicer::finish_read,
-            shared_from_this(),
-            _1,
-            _2));
+        [self_weak = weak_from_this()](const boost::system::error_code& ec, std::size_t bytes_transferred)
+        {
+            if (auto self = self_weak.lock())
+                self->finish_read(ec, bytes_transferred);
+        });
 }
 
 void wss::detail::http_client_servicer::do_write(
@@ -68,17 +69,16 @@ void wss::detail::http_client_servicer::do_write(
     boost::beast::async_write(
         stream,
         std::move(msg),
-        std::bind(
-            &http_client_servicer::finish_write,
-            shared_from_this(),
-            action,
-            _1,
-            _2));
+        [self_weak = weak_from_this(), action](const boost::system::error_code& ec, std::size_t bytes_transferred)
+        {
+            if (auto self = self_weak.lock())
+                self->finish_write(action, ec, bytes_transferred);
+        });
 }
 
 void wss::detail::http_client_servicer::finish_read(
     const boost::system::error_code& ec,
-    std::size_t bytes_transferred)
+    std::size_t /*bytes_transferred*/)
 {
     if (ec)
         return close(ec);
@@ -197,7 +197,7 @@ void wss::detail::http_client_servicer::finish_read(
 void wss::detail::http_client_servicer::finish_write(
     response_actions action,
     const boost::beast::error_code& ec,
-    std::size_t bytes_transferred)
+    std::size_t /*bytes_transferred*/)
 {
     if (ec)
         return close(ec);

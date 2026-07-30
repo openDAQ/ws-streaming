@@ -17,8 +17,13 @@
 
 using namespace std::placeholders;
 
-wss::server::server(boost::asio::any_io_executor executor)
+wss::server::server(
+        boost::asio::any_io_executor executor,
+        std::size_t rx_buffer_size,
+        std::size_t tx_buffer_size)
     : _executor(executor)
+    , _rx_buffer_size(rx_buffer_size)
+    , _tx_buffer_size(tx_buffer_size)
 {
 }
 
@@ -116,7 +121,7 @@ void wss::server::on_listener_accept(
 }
 
 nlohmann::json wss::server::on_servicer_command_interface_request(
-    const std::shared_ptr<detail::http_client_servicer>& servicer,
+    const std::shared_ptr<detail::http_client_servicer>& /*servicer*/,
     const std::string& method,
     const nlohmann::json& params)
 {
@@ -139,12 +144,27 @@ nlohmann::json wss::server::on_servicer_command_interface_request(
 }
 
 void wss::server::on_servicer_websocket_upgrade(
-    const std::shared_ptr<detail::http_client_servicer>& servicer,
+    const std::shared_ptr<detail::http_client_servicer>& /*servicer*/,
     boost::asio::ip::tcp::socket& socket)
 {
+    std::string connection_local_stream_id;
+    try
+    {
+        auto remote_endpoint = socket.remote_endpoint();
+        connection_local_stream_id = remote_endpoint.address().to_string()
+                                     + ":" + std::to_string(remote_endpoint.port());
+    }
+    catch (const std::exception& /*e*/)
+    {
+        return;
+    }
     auto connection = std::make_shared<wss::connection>(
         std::move(socket),
-        false);
+        false,
+        connection_local_stream_id,
+        false,
+        _rx_buffer_size,
+        _tx_buffer_size);
 
     if (_command_interface_port)
         connection->register_external_command_interface(
@@ -189,7 +209,7 @@ void wss::server::on_servicer_websocket_upgrade(
 
 void wss::server::on_servicer_closed(
     const std::shared_ptr<detail::http_client_servicer>& servicer,
-    const boost::system::error_code& ec)
+    const boost::system::error_code& /*ec*/)
 {
     _sessions.remove_if([&](const client_entry& entry)
     {

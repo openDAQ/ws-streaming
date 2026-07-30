@@ -25,7 +25,7 @@ using namespace std::placeholders;
 
 wss::detail::peer::peer(
         boost::asio::ip::tcp::socket&& socket,
-        bool is_client,
+        bool /*is_client*/,
         bool use_tcp_protocol,
         std::size_t rx_buffer_size,
         std::size_t tx_buffer_size)
@@ -48,9 +48,10 @@ void wss::detail::peer::run(const void *data, std::size_t size)
     if (size > _rx_buffer.size())
         boost::asio::post(
             _socket.get_executor(),
-            [self = shared_from_this()]()
+            [self_weak = weak_from_this()]()
             {
-                self->close(boost::asio::error::no_buffer_space);
+                if (auto self = self_weak.lock())
+                    self->close(boost::asio::error::no_buffer_space);
             });
 
     std::memcpy(
@@ -62,9 +63,10 @@ void wss::detail::peer::run(const void *data, std::size_t size)
 
     boost::asio::post(
         _socket.get_executor(),
-        [self = shared_from_this()]()
+        [self_weak = weak_from_this()]()
         {
-            self->process_buffer();
+            if (auto self = self_weak.lock())
+                self->process_buffer();
         });
 }
 
@@ -115,20 +117,22 @@ void wss::detail::peer::do_wait_rx()
 {
     _socket.async_wait(
         boost::asio::socket_base::wait_read,
-        std::bind(
-            &peer::finish_wait_rx,
-            shared_from_this(),
-            _1));
+        [self_weak = weak_from_this()](const boost::system::error_code& ec)
+        {
+            if (auto self = self_weak.lock())
+                self->finish_wait_rx(ec);
+        });
 }
 
 void wss::detail::peer::do_wait_tx()
 {
     _socket.async_wait(
         boost::asio::socket_base::wait_write,
-        std::bind(
-            &peer::finish_wait_tx,
-            shared_from_this(),
-            _1));
+        [self_weak = weak_from_this()](const boost::system::error_code& ec)
+        {
+            if (auto self = self_weak.lock())
+                self->finish_wait_tx(ec);
+        });
 
     _waiting_tx = true;
 }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <functional>
 #include <memory>
 #include <string>
@@ -40,8 +41,15 @@ namespace wss
              * the specified execution context.
              *
              * @param executor An execution context to use for asynchronous I/O operations.
+             * @param rx_buffer_size The desired size of each connection's underlying peer receive
+             *     buffer, in bytes. See wss::detail::peer::peer() for details.
+             * @param tx_buffer_size The desired size of each connection's underlying peer transmit
+             *     buffer, in bytes. See wss::detail::peer::peer() for details.
              */
-            client(boost::asio::any_io_executor executor);
+            client(
+                boost::asio::any_io_executor executor,
+                std::size_t rx_buffer_size = 1024 * 1024,
+                std::size_t tx_buffer_size = 32 * 1024 * 1024);
 
             /**
              * Asynchronously connects to a remote server. An HTTP GET request is made to
@@ -84,5 +92,7 @@ namespace wss
 
             std::shared_ptr<detail::http_client> _http_client;
             boost::asio::any_io_executor _executor;
+            std::size_t _rx_buffer_size;
+            std::size_t _tx_buffer_size;
     };
 }

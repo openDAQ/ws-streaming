@@ -21,9 +21,14 @@
 #include <ws-streaming/detail/base64.hpp>
 #include <ws-streaming/detail/url.hpp>
 
-wss::client::client(boost::asio::any_io_executor executor)
+wss::client::client(
+        boost::asio::any_io_executor executor,
+        std::size_t rx_buffer_size,
+        std::size_t tx_buffer_size)
     : _http_client{std::make_shared<detail::http_client>(executor)}
     , _executor(executor)
+    , _rx_buffer_size(rx_buffer_size)
+    , _tx_buffer_size(tx_buffer_size)
 {
 }
 
@@ -46,7 +51,7 @@ void wss::client::async_connect(
             url_obj.host_address(),
             std::to_string(port),
             create_request(url),
-            [handler = std::move(handler)](
+            [handler = std::move(handler), rx_buffer_size = _rx_buffer_size, tx_buffer_size = _tx_buffer_size](
                 const boost::system::error_code& ec,
                 const boost::beast::http::response<boost::beast::http::string_body>& response,
                 boost::beast::tcp_stream& stream,
@@ -58,9 +63,25 @@ void wss::client::async_connect(
                 if (response.result() != boost::beast::http::status::switching_protocols)
                     return handler(boost::beast::http::error::bad_status, {});
 
+                std::string connection_local_stream_id;
+                try
+                {
+                    auto remote_endpoint = stream.socket().remote_endpoint();
+                    connection_local_stream_id = remote_endpoint.address().to_string()
+                                                 + ":" + std::to_string(remote_endpoint.port());
+                }
+                catch (const std::exception& /*e*/)
+                {
+                    return;
+                }
+
                 auto connection = std::make_shared<wss::connection>(
                     stream.release_socket(),
-                    true);
+                    true,
+                    connection_local_stream_id,
+                    false,
+                    rx_buffer_size,
+                    tx_buffer_size);
 
                 auto data = buffer.data();
                 connection->run(data.data(), data.size());
@@ -81,7 +102,9 @@ void wss::client::async_connect(
             std::to_string(port),
             [
                 resolver,
-                handler = std::move(handler)
+                handler = std::move(handler),
+                rx_buffer_size = _rx_buffer_size,
+                tx_buffer_size = _tx_buffer_size
             ](
                 const boost::system::error_code& ec,
                 const boost::asio::ip::tcp::resolver::results_type& results)
@@ -93,16 +116,31 @@ void wss::client::async_connect(
 
                 socket->async_connect(
                     *results.begin(),
-                    [socket, handler = std::move(handler)]
+                    [socket, handler = std::move(handler), rx_buffer_size, tx_buffer_size]
                     (const boost::system::error_code& ec)
                     {
                         if (ec)
                             return handler(ec, {});
 
+                        std::string connection_local_stream_id;
+                        try
+                        {
+                            auto remote_endpoint = socket->remote_endpoint();
+                            connection_local_stream_id = remote_endpoint.address().to_string()
+                                                         + ":" + std::to_string(remote_endpoint.port());
+                        }
+                        catch (const std::exception& /*e*/)
+                        {
+                            return;
+                        }
+
                         auto connection = std::make_shared<wss::connection>(
                             std::move(*socket),
                             true,
-                            true);
+                            connection_local_stream_id,
+                            true,
+                            rx_buffer_size,
+                            tx_buffer_size);
 
                         connection->run();
                         handler({}, connection);

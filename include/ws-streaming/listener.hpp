@@ -105,9 +105,13 @@ namespace wss
 
             void do_accept()
             {
-                using namespace std::placeholders;
                 acceptor.async_accept(
-                    std::bind(&listener::finish_accept, this->shared_from_this(), _1, _2));
+                    [self_weak = this->weak_from_this()](auto&& ec, auto&& socket) {
+                        if (auto self = self_weak.lock()) {
+                            self->finish_accept(ec, std::forward<decltype(socket)>(socket));
+                        }
+                    }
+                );
             }
 
             void finish_accept(

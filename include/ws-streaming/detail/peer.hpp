@@ -368,7 +368,7 @@ namespace wss::detail
             template <typename ConstBufferSequence>
             void enqueue(
                 const ConstBufferSequence& buffers,
-                std::size_t size,
+                std::size_t /*size*/,
                 bool do_shutdown_after)
             {
                 std::size_t bytes_buffered = boost::asio::buffer_copy(

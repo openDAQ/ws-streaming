@@ -66,8 +66,8 @@ void wss::detail::http_command_interface_client::async_request(
         [this, handler = std::move(handler), client](
             const boost::system::error_code& ec,
             const boost::beast::http::response<boost::beast::http::string_body>& response,
-            boost::beast::tcp_stream& stream,
-            const boost::beast::flat_buffer& buffer)
+            boost::beast::tcp_stream& /*stream*/,
+            const boost::beast::flat_buffer& /*buffer*/)
         {
             _clients.erase(client);
 
@@ -84,7 +84,7 @@ void wss::detail::http_command_interface_client::async_request(
                 response_json = nlohmann::json::parse(response.body());
             }
 
-            catch (const nlohmann::json::exception& ex)
+            catch (const nlohmann::json::exception& /*ex*/)
             {
             }
 

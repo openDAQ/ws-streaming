@@ -28,11 +28,13 @@ using namespace std::placeholders;
 wss::connection::connection(
         boost::asio::ip::tcp::socket&& socket,
         bool is_client,
-        bool use_tcp_protocol)
+        std::string local_stream_id,
+        bool use_tcp_protocol,
+        std::size_t rx_buffer_size,
+        std::size_t tx_buffer_size)
     : _is_client{is_client}
-    , _peer{std::make_shared<detail::peer>(std::move(socket), is_client, use_tcp_protocol)}
-    , _local_stream_id{_peer->socket().remote_endpoint().address().to_string()
-        + ":" + std::to_string(_peer->socket().remote_endpoint().port())}
+    , _peer{std::make_shared<detail::peer>(std::move(socket), is_client, use_tcp_protocol, rx_buffer_size, tx_buffer_size)}
+    , _local_stream_id{local_stream_id}
 {
     _command_interfaces["jsonrpc"] = { { "httpMethod", "" } };
 }
@@ -51,9 +53,25 @@ void wss::connection::register_external_command_interface(
 
 void wss::connection::run()
 {
-    _on_peer_data_received = _peer->on_data_received.connect(std::bind(&connection::on_peer_data_received, shared_from_this(), _1, _2, _3));
-    _on_peer_metadata_received = _peer->on_metadata_received.connect(std::bind(&connection::on_peer_metadata_received, shared_from_this(), _1, _2, _3));
-    _on_peer_closed = _peer->on_closed.connect(std::bind(&connection::on_peer_closed, shared_from_this(), _1));
+    auto self_weak = weak_from_this();
+
+    _on_peer_data_received = _peer->on_data_received.connect(
+        [self_weak](unsigned signo, const std::uint8_t* data, std::size_t size) {
+            if (auto self = self_weak.lock())
+                self->on_peer_data_received(signo, data, size);
+        });
+
+    _on_peer_metadata_received = _peer->on_metadata_received.connect(
+        [self_weak](unsigned signo, const std::string& method, const nlohmann::json& params) {
+            if (auto self = self_weak.lock())
+                self->on_peer_metadata_received(signo, method, params);
+        });
+
+    _on_peer_closed = _peer->on_closed.connect(
+        [self_weak](const boost::system::error_code& ec) {
+            if (auto self = self_weak.lock())
+                self->on_peer_closed(ec);
+        });
 
     _peer->run();
 
@@ -63,9 +81,28 @@ void wss::connection::run()
 
 void wss::connection::run(const void *data, std::size_t size)
 {
-    _on_peer_data_received = _peer->on_data_received.connect(std::bind(&connection::on_peer_data_received, shared_from_this(), _1, _2, _3));
-    _on_peer_metadata_received = _peer->on_metadata_received.connect(std::bind(&connection::on_peer_metadata_received, shared_from_this(), _1, _2, _3));
-    _on_peer_closed = _peer->on_closed.connect(std::bind(&connection::on_peer_closed, shared_from_this(), _1));
+    auto self_weak = weak_from_this();
+
+    _on_peer_data_received = _peer->on_data_received.connect(
+        [self_weak](unsigned signo, const std::uint8_t* data, std::size_t size)
+        {
+            if (auto self = self_weak.lock())
+                self->on_peer_data_received(signo, data, size);
+        });
+
+    _on_peer_metadata_received = _peer->on_metadata_received.connect(
+        [self_weak](unsigned signo, const std::string& method, const nlohmann::json& params)
+        {
+            if (auto self = self_weak.lock())
+                self->on_peer_metadata_received(signo, method, params);
+        });
+
+    _on_peer_closed = _peer->on_closed.connect(
+        [self_weak](const boost::system::error_code& ec)
+        {
+            if (auto self = self_weak.lock())
+                self->on_peer_closed(ec);
+        });
 
     _peer->run(data, size);
 
@@ -266,6 +303,7 @@ void wss::connection::on_local_signal_metadata_changed(
         }
     }
 
+    entry.value_index = 0;
     _peer->send_metadata(entry.signo, "signal", entry.signal.metadata().json());
 }
 
@@ -316,7 +354,7 @@ void wss::connection::on_signal_subscribe_requested(
         return; // @todo XXX TODO
 
     _command_interface_client->async_request(_remote_stream_id + ".subscribe", { signal_id },
-        [](const boost::system::error_code& ec, const nlohmann::json& response)
+        [](const boost::system::error_code& /*ec*/, const nlohmann::json& /*response*/)
         {
         });
 }
@@ -328,7 +366,7 @@ void wss::connection::on_signal_unsubscribe_requested(
         return; // @todo XXX TODO
 
     _command_interface_client->async_request(_remote_stream_id + ".unsubscribe", { signal_id },
-        [](const boost::system::error_code& ec, const nlohmann::json& response)
+        [](const boost::system::error_code& /*ec*/, const nlohmann::json& /*response*/)
         {
         });
 }
@@ -615,21 +653,25 @@ bool wss::connection::subscribe(
         "signal",
         metadata);
 
+    auto self_weak = weak_from_this();
+    auto signal_weak = std::weak_ptr<detail::registered_local_signal>(signal);
+
     signal->on_data_published = signal->signal.on_data_published.connect(
-        std::bind(
-            &connection::on_local_signal_data_published,
-            shared_from_this(),
-            signal,
-            _1,
-            _2,
-            _3,
-            _4));
+        [self_weak, signal_weak](std::int64_t domain_value,
+                                 std::size_t sample_count,
+                                 const void* data,
+                                 std::size_t size) {
+            if (auto self = self_weak.lock())
+                if (auto s = signal_weak.lock())
+                    self->on_local_signal_data_published(s, domain_value, sample_count, data, size);
+        });
 
     signal->on_metadata_changed = signal->signal.on_metadata_changed.connect(
-        std::bind(
-            &connection::on_local_signal_metadata_changed,
-            shared_from_this(),
-            std::ref(*signal)));
+        [self_weak, signal_weak]() {
+            if (auto self = self_weak.lock())
+                if (auto s = signal_weak.lock())
+                    self->on_local_signal_metadata_changed(*s);
+        });
 
     return true;
 }

@@ -38,9 +38,20 @@ wss::detail::command_interface_client_factory::create_client(
         else
             port = interfaces["jsonrpc-http"]["port"];
 
+        std::string remote_endpoint_address;
+        try
+        {
+            auto remote_endpoint = peer->socket().remote_endpoint();
+            remote_endpoint_address = remote_endpoint.address().to_string();
+        }
+        catch (const std::exception& /*e*/)
+        {
+            return nullptr;
+        }
+
         return std::make_unique<http_command_interface_client>(
             peer->socket().get_executor(),
-            peer->socket().remote_endpoint().address().to_string(),
+            remote_endpoint_address,
             port,
             interfaces["jsonrpc-http"]["httpMethod"],
             interfaces["jsonrpc-http"]["httpPath"],

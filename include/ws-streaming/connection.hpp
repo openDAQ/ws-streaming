@@ -58,11 +58,18 @@ namespace wss
              *     symmetric connections.
              * @param use_tcp_protocol True to use the direct TCP protocol instead of a WebSocket
              *     connection.
+             * @param rx_buffer_size The desired size of the underlying peer's receive buffer, in
+             *     bytes. See wss::detail::peer::peer() for details.
+             * @param tx_buffer_size The desired size of the underlying peer's transmit buffer, in
+             *     bytes. See wss::detail::peer::peer() for details.
              */
             connection(
                 boost::asio::ip::tcp::socket&& socket,
                 bool is_client,
-                bool use_tcp_protocol = false);
+                std::string local_stream_id,
+                bool use_tcp_protocol = false,
+                std::size_t rx_buffer_size = 1024 * 1024,
+                std::size_t tx_buffer_size = 32 * 1024 * 1024);
 
             /**
              * Destroys a connection object.

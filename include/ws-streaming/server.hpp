@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <cstddef>
 #include <list>
 #include <memory>
 #include <set>
@@ -50,8 +51,15 @@ namespace wss
              * the specified execution context.
              *
              * @param executor An execution context to use for asynchronous I/O operations.
+             * @param rx_buffer_size The desired size of each connection's underlying peer receive
+             *     buffer, in bytes. See wss::detail::peer::peer() for details.
+             * @param tx_buffer_size The desired size of each connection's underlying peer transmit
+             *     buffer, in bytes. See wss::detail::peer::peer() for details.
              */
-            server(boost::asio::any_io_executor executor);
+            server(
+                boost::asio::any_io_executor executor,
+                std::size_t rx_buffer_size = 1024 * 1024,
+                std::size_t tx_buffer_size = 32 * 1024 * 1024);
 
             /**
              * Adds a listener so that the server listens on the specified TCP port number.
@@ -291,5 +299,7 @@ namespace wss
             std::set<local_signal *> _signals;
             std::list<local_signal *> _ordered_signals;
             std::uint16_t _command_interface_port = 0;
+            std::size_t _rx_buffer_size;
+            std::size_t _tx_buffer_size;
     };
 }
