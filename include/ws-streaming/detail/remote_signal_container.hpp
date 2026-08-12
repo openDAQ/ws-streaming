@@ -21,8 +21,8 @@ namespace wss::detail
             struct remote_signal_entry
             {
                 remote_signal_entry(const std::string& id, bool hidden)
-                    : signal(std::make_shared<detail::remote_signal_impl>(id))
-                    , hidden(hidden)
+                    : hidden(hidden)
+                    , signal(std::make_shared<detail::remote_signal_impl>(id))
                 {
                 }
 
