@@ -85,7 +85,7 @@ link:{cmake-add-subdirectory}[add_subdirectory()].
 === Using an Installed Version of the Library
 
 [source,cmake]
-find_package(ws-streaming 3.1.0 REQUIRED)
+find_package(ws-streaming 3.1.1 REQUIRED)
 
 === Fetching the Library and Building In-Project
 
@@ -93,7 +93,7 @@ find_package(ws-streaming 3.1.0 REQUIRED)
 ----
 FetchContent_Declare(ws-streaming
     GIT_REPOSITORY  https://github.com/openDAQ/ws-streaming
-    GIT_TAG         v3.1.0
+    GIT_TAG         v3.1.1
     OVERRIDE_FIND_PACKAGE)
 
 FetchContent_MakeAvailable(ws-streaming)
