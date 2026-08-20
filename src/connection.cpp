@@ -19,11 +19,14 @@
 #include <ws-streaming/detail/in_band_command_interface_client.hpp>
 #include <ws-streaming/detail/linear_table.hpp>
 #include <ws-streaming/detail/peer.hpp>
-#include <ws-streaming/detail/peer_tls.hpp>
 #include <ws-streaming/detail/registered_local_signal.hpp>
 #include <ws-streaming/detail/remote_signal_impl.hpp>
 #include <ws-streaming/detail/semver.hpp>
 #include <ws-streaming/detail/streaming_protocol.hpp>
+
+#if WS_STREAMING_ENABLE_TLS
+#include <ws-streaming/detail/peer_tls.hpp>
+#endif
 
 using namespace std::placeholders;
 
@@ -40,6 +43,8 @@ wss::connection::connection(
     _command_interfaces["jsonrpc"] = { { "httpMethod", "" } };
 }
 
+#if WS_STREAMING_ENABLE_TLS
+
 wss::connection::connection(
         boost::asio::ssl::stream<boost::beast::tcp_stream>&& stream,
         bool is_client,
@@ -52,6 +57,8 @@ wss::connection::connection(
 {
     _command_interfaces["jsonrpc"] = { { "httpMethod", "" } };
 }
+
+#endif
 
 wss::connection::~connection()
 {

@@ -7,8 +7,6 @@
 #include <string>
 
 #include <boost/asio.hpp>
-#include <boost/asio/ssl/context.hpp>
-#include <boost/asio/ssl/stream.hpp>
 #include <boost/beast/core/tcp_stream.hpp>
 #include <boost/signals2/signal.hpp>
 
@@ -21,6 +19,11 @@
 #include <ws-streaming/detail/connected_client.hpp>
 #include <ws-streaming/detail/connected_client_iterator.hpp>
 #include <ws-streaming/detail/http_client_servicer.hpp>
+
+#if WS_STREAMING_ENABLE_TLS
+#include <boost/asio/ssl/context.hpp>
+#include <boost/asio/ssl/stream.hpp>
+#endif
 
 namespace wss
 {
@@ -80,6 +83,8 @@ namespace wss
              */
             void add_listener(std::shared_ptr<listener<>> listener);
 
+#if WS_STREAMING_ENABLE_TLS
+
             /**
              * Adds a TLS listener so that the server accepts TLS-encrypted WebSocket connections
              * on the specified TCP port number. The library builds and owns the SSL context
@@ -92,7 +97,8 @@ namespace wss
              * Clients connecting with a `wss://` URL that does not specify a port number use port
              * 7415.
              *
-             * This function must be called before calling run().
+             * This function must be called before calling run(). It is only available in a
+             * build with TLS support.
              *
              * @param port The port number to listen on.
              * @param cert_file Path to the server certificate chain (PEM). Required.
@@ -117,6 +123,8 @@ namespace wss
                 const std::string& key_file,
                 const std::string& ca_file = {},
                 bool make_command_interface = false);
+
+#endif
 
             /**
              * Adds listeners for the standard port numbers specified by the WebSocket Streaming
@@ -274,10 +282,14 @@ namespace wss
             void on_listener_accept(
                 boost::asio::ip::tcp::socket& socket);
 
+#if WS_STREAMING_ENABLE_TLS
+
             // Accepts a connection on a TLS listener and starts a TLS servicer session
             // The TLS handshake is performed by the servicer
             void on_tls_listener_accept(
                 boost::asio::ip::tcp::socket& socket);
+
+#endif
 
             // Wires up a newly constructed servicer (plaintext or TLS) into a session.
             // Templated on the servicer type so that the correct WebSocket-upgrade
@@ -308,10 +320,14 @@ namespace wss
                 return socket;
             }
 
+#if WS_STREAMING_ENABLE_TLS
+
             static boost::asio::ip::tcp::socket& tcp_socket_of(boost::asio::ssl::stream<boost::beast::tcp_stream>& stream)
             {
                 return stream.next_layer().socket();
             }
+
+#endif
 
             // Handles a completed WebSocket upgrade by taking ownership
             // of the transport (bare socket or ssl::stream) and building a connection from it
@@ -422,6 +438,8 @@ namespace wss
             std::set<local_signal *> _signals;
             std::list<local_signal *> _ordered_signals;
             std::uint16_t _command_interface_port = 0;
+#if WS_STREAMING_ENABLE_TLS
             std::unique_ptr<boost::asio::ssl::context> _ssl_context;    // null if no TLS listener has been added
+#endif
     };
 }

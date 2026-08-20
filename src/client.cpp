@@ -2,13 +2,13 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
 
 #include <boost/asio/any_io_executor.hpp>
 #include <boost/asio/ip/tcp.hpp>
-#include <boost/asio/ssl/stream.hpp>
 #include <boost/beast/core/flat_buffer.hpp>
 #include <boost/beast/core/tcp_stream.hpp>
 #include <boost/beast/http/error.hpp>
@@ -20,14 +20,20 @@
 #include <ws-streaming/client.hpp>
 #include <ws-streaming/connection.hpp>
 #include <ws-streaming/detail/base64.hpp>
-#include <ws-streaming/detail/tls.hpp>
 #include <ws-streaming/detail/url.hpp>
+
+#if WS_STREAMING_ENABLE_TLS
+#include <boost/asio/ssl/stream.hpp>
+#include <ws-streaming/detail/tls.hpp>
+#endif
 
 wss::client::client(boost::asio::any_io_executor executor)
     : _http_client{std::make_shared<detail::http_client>(executor)}
     , _executor(executor)
 {
 }
+
+#if WS_STREAMING_ENABLE_TLS
 
 void wss::client::enable_tls(
     const std::string& ca_file,
@@ -69,6 +75,8 @@ const std::shared_ptr<wss::detail::https_client>& wss::client::ensure_https_clie
 
     return _https_client;
 }
+
+#endif
 
 void wss::client::async_connect(
     std::string_view url,
@@ -127,6 +135,8 @@ void wss::client::async_connect(
 
     else if (url_obj.scheme() == "wss")
     {
+#if WS_STREAMING_ENABLE_TLS
+
         std::uint16_t port = url_obj.port_number()
             .value_or(detail::streaming_protocol::DEFAULT_SECURE_WEBSOCKET_PORT);
 
@@ -170,6 +180,13 @@ void wss::client::async_connect(
 
                 handler({}, connection);
             });
+
+#else
+
+        throw std::invalid_argument(
+            "wss:// URLs require a build of ws-streaming with TLS support");
+
+#endif
     }
 
     else
@@ -231,8 +248,10 @@ void wss::client::cancel()
 {
     _http_client->cancel();
 
+#if WS_STREAMING_ENABLE_TLS
     if (_https_client)
         _https_client->cancel();
+#endif
 }
 
 boost::beast::http::request<boost::beast::http::string_body>

@@ -10,7 +10,6 @@ set(sources
     ./detail/local_signal_container.cpp
     ./detail/base_peer.cpp
     ./detail/peer.cpp
-    ./detail/peer_tls.cpp
     ./detail/remote_signal_container.cpp
     ./detail/remote_signal_impl.cpp
     ./detail/semver.cpp
@@ -49,14 +48,12 @@ set(headers
     ../include/ws-streaming/detail/linear_table.hpp
     ../include/ws-streaming/detail/local_signal_container.hpp
     ../include/ws-streaming/detail/peer.hpp
-    ../include/ws-streaming/detail/peer_tls.hpp
     ../include/ws-streaming/detail/registered_local_signal.hpp
     ../include/ws-streaming/detail/remote_signal_container.hpp
     ../include/ws-streaming/detail/remote_signal_impl.hpp
     ../include/ws-streaming/detail/semver.hpp
     ../include/ws-streaming/detail/ssl_stream_traits.hpp
     ../include/ws-streaming/detail/streaming_protocol.hpp
-    ../include/ws-streaming/detail/tls.hpp
     ../include/ws-streaming/detail/url.hpp
     ../include/ws-streaming/detail/websocket_protocol.hpp
     ../include/ws-streaming/dimension_builder.hpp
@@ -76,6 +73,19 @@ set(headers
     ../include/ws-streaming/unit.hpp
     ../include/ws-streaming/ws-streaming.hpp
 )
+
+if(WS_STREAMING_ENABLE_TLS)
+
+    list(APPEND sources
+        ./detail/peer_tls.cpp
+    )
+
+    list(APPEND headers
+        ../include/ws-streaming/detail/peer_tls.hpp
+        ../include/ws-streaming/detail/tls.hpp
+    )
+
+endif()
 
 add_library(${PROJECT_NAME} ${sources} ${headers})
 add_library(${PROJECT_NAME}::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
@@ -122,9 +132,15 @@ target_link_libraries(${PROJECT_NAME}
         Boost::signals2
         Boost::uuid
         nlohmann_json::nlohmann_json
-        OpenSSL::SSL
-        OpenSSL::Crypto
 )
+
+if(WS_STREAMING_ENABLE_TLS)
+    target_compile_definitions(${PROJECT_NAME} PUBLIC WS_STREAMING_ENABLE_TLS)
+
+    target_link_libraries(${PROJECT_NAME} PUBLIC  OpenSSL::SSL
+                                                  OpenSSL::Crypto
+    )
+endif()
 
 if(WS_STREAMING_INSTALL)
 
@@ -142,10 +158,20 @@ if(WS_STREAMING_INSTALL)
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     )
 
+    if(WS_STREAMING_ENABLE_TLS)
+        set(excluded_headers "")
+    else()
+        set(excluded_headers
+            PATTERN peer_tls.hpp EXCLUDE
+            PATTERN tls.hpp EXCLUDE
+        )
+    endif()
+
     install(
         DIRECTORY ../include/ws-streaming
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
         FILES_MATCHING PATTERN *.hpp
+        ${excluded_headers}
     )
 
     write_basic_package_version_file(

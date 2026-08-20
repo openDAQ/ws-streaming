@@ -8,7 +8,6 @@
 
 #include <boost/asio/any_io_executor.hpp>
 #include <boost/asio/ip/tcp.hpp>
-#include <boost/asio/ssl/stream.hpp>
 #include <boost/beast/core/tcp_stream.hpp>
 #include <boost/signals2/connection.hpp>
 #include <boost/signals2/signal.hpp>
@@ -27,6 +26,10 @@
 #include <ws-streaming/detail/remote_signal_container.hpp>
 #include <ws-streaming/detail/remote_signal_impl.hpp>
 #include <ws-streaming/detail/semver.hpp>
+
+#if WS_STREAMING_ENABLE_TLS
+#include <boost/asio/ssl/stream.hpp>
+#endif
 
 namespace wss
 {
@@ -71,12 +74,16 @@ namespace wss
                 std::string local_stream_id,
                 bool use_tcp_protocol = false);
 
+#if WS_STREAMING_ENABLE_TLS
+
             /**
              * Constructs a connection object from a TLS stream. Behaves identically to the TCP
              * socket constructor, except that all subsequent I/O is performed over the TLS-
              * encrypted stream. The stream must already be connected and its TLS handshake must
              * already be complete (including the HTTP WebSocket upgrade request and response, if
              * necessary).
+             *
+             * This constructor is only available in a build with TLS support.
              *
              * @param stream A connected, handshaken TLS stream. The constructed object takes
              *     ownership of the stream. The stream's execution context is used for all
@@ -91,6 +98,8 @@ namespace wss
                 bool is_client,
                 std::string local_stream_id,
                 bool use_tcp_protocol = false);
+
+#endif
 
             /**
              * Destroys a connection object.

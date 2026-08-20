@@ -5,8 +5,13 @@ set(sources
     ./test_peer_limits.cpp
     ./test_semver.cpp
     ./test_streaming_protocol.cpp
-    ./test_tls.cpp
 )
+
+if(WS_STREAMING_ENABLE_TLS)
+
+    list(APPEND sources ./test_tls.cpp)
+
+endif()
 
 foreach(source ${sources})
 
@@ -27,9 +32,13 @@ foreach(source ${sources})
 
 endforeach()
 
-add_custom_command(
-    TARGET test_tls POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-            ${CMAKE_CURRENT_SOURCE_DIR}/secrets
-            $<TARGET_FILE_DIR:test_tls>/secrets
-)
+if(WS_STREAMING_ENABLE_TLS)
+
+    add_custom_command(
+        TARGET test_tls POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+                ${CMAKE_CURRENT_SOURCE_DIR}/secrets
+                $<TARGET_FILE_DIR:test_tls>/secrets
+    )
+
+endif()

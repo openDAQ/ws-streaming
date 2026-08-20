@@ -14,7 +14,10 @@
 #include <ws-streaming/server.hpp>
 #include <ws-streaming/detail/http_client_servicer.hpp>
 #include <ws-streaming/detail/streaming_protocol.hpp>
+
+#if WS_STREAMING_ENABLE_TLS
 #include <ws-streaming/detail/tls.hpp>
+#endif
 
 using namespace std::placeholders;
 
@@ -46,6 +49,8 @@ void wss::server::add_listener(
                 _1)));
 }
 
+#if WS_STREAMING_ENABLE_TLS
+
 void wss::server::add_tls_listener(
     std::uint16_t port,
     const std::string& cert_file,
@@ -68,6 +73,8 @@ void wss::server::add_tls_listener(
     if (make_command_interface)
         _command_interface_port = port;
 }
+
+#endif
 
 void wss::server::add_default_listeners()
 {
@@ -133,6 +140,8 @@ void wss::server::on_listener_accept(
         std::make_shared<detail::http_client_servicer>(std::move(socket)));
 }
 
+#if WS_STREAMING_ENABLE_TLS
+
 void wss::server::on_tls_listener_accept(
     boost::asio::ip::tcp::socket& socket)
 {
@@ -142,6 +151,8 @@ void wss::server::on_tls_listener_accept(
     start_session(
         std::make_shared<detail::https_client_servicer>(std::move(socket), *_ssl_context));
 }
+
+#endif
 
 nlohmann::json wss::server::on_servicer_command_interface_request(
     const std::string& method,

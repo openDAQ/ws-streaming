@@ -6,6 +6,7 @@ option(WS_STREAMING_BUILD_BENCHMARKS "Build benchmark programs"         ${PROJEC
 option(WS_STREAMING_BUILD_EXAMPLES  "Build example programs"            ${PROJECT_IS_TOP_LEVEL})
 option(WS_STREAMING_BUILD_TESTS     "Build unit tests"                  ${PROJECT_IS_TOP_LEVEL})
 option(WS_STREAMING_INSTALL         "Generate CMake install targets"    ON)
+option(WS_STREAMING_ENABLE_TLS      "Build with TLS (wss://) support"   ON)
 
 include(CMakePackageConfigHelpers)
 include(FetchContent)
@@ -13,7 +14,9 @@ include(GNUInstallDirs)
 
 include(dependencies/Boost.cmake)
 include(dependencies/nlohmann_json.cmake)
-include(dependencies/OpenSSL.cmake)
+if(WS_STREAMING_ENABLE_TLS)
+    include(dependencies/OpenSSL.cmake)
+endif()
 include(dependencies/Threads.cmake)
 
 add_subdirectory(src)

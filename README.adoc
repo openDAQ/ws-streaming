@@ -37,6 +37,10 @@ support and must be installed beforehand. Once it is, and as long as CMake and a
 compiler are installed, it is usually sufficient to simply clone and build the library without
 first installing any additional dependencies.
 
+TLS support can also be switched off entirely by setting `WS_STREAMING_ENABLE_TLS` to `OFF`, in
+which case OpenSSL is not needed at all, neither to build nor to run the library. See
+<<CMake Options>>.
+
 * Build dependencies:
 ** Tools:
 *** A C++ compiler supporting link:{cpp17}[C{plus}{plus}17] (e.g., link:{gcc}[gcc], link:{clang}[clang], link:{msvc}[MSVC])
@@ -46,10 +50,11 @@ first installing any additional dependencies.
 *** link:{boost}[Boost] header-only libraries (asio, beast, serialization, signals2) &ge; 1.84
 *** link:{nlohmann-json}[nlohmann-json] &ge; v3.12.0
 ** Libraries (must already be installed):
-*** link:{openssl}[OpenSSL] &ge; 1.1.1, used by Boost.Asio to implement TLS
+*** link:{openssl}[OpenSSL] &ge; 1.1.1, used by Boost.Asio to implement TLS; not needed if
+    `WS_STREAMING_ENABLE_TLS` is `OFF`
 * Runtime dependencies:
 ** link:{boost}[Boost] compiled libraries (system, url) &ge; 1.84
-** link:{openssl}[OpenSSL] &ge; 1.1.1
+** link:{openssl}[OpenSSL] &ge; 1.1.1; not needed if `WS_STREAMING_ENABLE_TLS` is `OFF`
 
 == Building & Installing the Library
 
@@ -77,9 +82,26 @@ The following CMake options are supported, and their values can be set by adding
 | Option                                | Description                       | Default
 | `WS_STREAMING_BUILD_EXAMPLES`         | Build example programs            | `ON` if top-level project
 | `WS_STREAMING_BUILD_TESTS`            | Build unit tests                  | `ON` if top-level project
+| `WS_STREAMING_ENABLE_TLS`             | Build with TLS (`wss://`) support | `ON`
 | `WS_STREAMING_IGNORE_INSTALLED_BOOST` | Always fetch Boost                | `OFF`
 | `WS_STREAMING_INSTALL`                | Generate CMake install targets    | `ON`
 |=======================
+
+Setting `WS_STREAMING_ENABLE_TLS` to `OFF` builds a library with no dependency on OpenSSL. Such a
+build supports `ws://` connections only: `client::enable_tls()`,
+`client::enable_tls_without_verification()`, `server::add_tls_listener()` and the `connection`
+constructor taking a TLS stream do not exist, and passing a `wss://` URL to
+`client::async_connect()` throws `std::invalid_argument`. A build with TLS support defines the
+macro `WS_STREAMING_ENABLE_TLS`, carried by the `ws-streaming::ws-streaming` target; a build
+without it leaves the macro undefined. Application code that must work with both kinds of build
+can test it:
+
+[source,cpp]
+----
+#if WS_STREAMING_ENABLE_TLS
+    client.enable_tls(ca_file);
+#endif
+----
 
 == Using the Library in a Project
 

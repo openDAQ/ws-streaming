@@ -6,7 +6,6 @@
 #include <string_view>
 
 #include <boost/asio/any_io_executor.hpp>
-#include <boost/asio/ssl/context.hpp>
 #include <boost/beast/http/message.hpp>
 #include <boost/beast/http/string_body.hpp>
 #include <boost/system/error_code.hpp>
@@ -14,6 +13,10 @@
 #include <ws-streaming/connection.hpp>
 #include <ws-streaming/detail/http_client.hpp>
 #include <ws-streaming/detail/url.hpp>
+
+#if WS_STREAMING_ENABLE_TLS
+#include <boost/asio/ssl/context.hpp>
+#endif
 
 namespace wss
 {
@@ -24,10 +27,11 @@ namespace wss
      * completion function passed to async_connect() is called with the corresponding error code
      * and, if successful, a constructed @ref connection object.
      *
-     * Connections can be unencrypted (`ws://` URLs) or encrypted with TLS (`wss://` URLs). To use
-     * TLS, call enable_tls() to configure the certificate files to use before calling
-     * async_connect(), or enable_tls_without_verification() to encrypt the connection without
-     * authenticating the server.
+     * Connections can be unencrypted (`ws://` URLs) or, in a build with TLS support, encrypted
+     * with TLS (`wss://` URLs). To use TLS, call enable_tls() to configure the certificate files
+     * to use before calling async_connect(), or enable_tls_without_verification() to encrypt the
+     * connection without authenticating the server. In a build without TLS support neither
+     * function exists and `wss://` URLs are rejected.
      *
      * A client object can handle multiple async_connect() calls, but only one connection attempt
      * at a time may be in progress. Connection attempts can be canceled by calling cancel(); the
@@ -48,6 +52,8 @@ namespace wss
              * @param executor An execution context to use for asynchronous I/O operations.
              */
             client(boost::asio::any_io_executor executor);
+
+#if WS_STREAMING_ENABLE_TLS
 
             /**
              * Enables TLS for `wss://` connections and configures the certificate files to use.
@@ -89,6 +95,8 @@ namespace wss
              */
             void enable_tls_without_verification();
 
+#endif
+
             /**
              * Asynchronously connects to a remote server. An HTTP GET request is made to
              * establish the WebSocket connection.
@@ -108,8 +116,8 @@ namespace wss
              *
              * @throws std::invalid_argument A `wss://` URL was given, but TLS has not been
              *     configured by a successful call to enable_tls() or
-             *     enable_tls_without_verification(). The completion handler is not called in this
-             *     case.
+             *     enable_tls_without_verification(), or the library was built without TLS
+             *     support. The completion handler is not called in this case.
              */
             void async_connect(
                 std::string_view url,
@@ -137,20 +145,26 @@ namespace wss
 
             std::string get_random_key();
 
+#if WS_STREAMING_ENABLE_TLS
+
             // Lazily builds the TLS context and https_client on first use, if not already built by
             // enable_tls(). Returns the https_client to use for a wss:// connection.
             const std::shared_ptr<detail::https_client>& ensure_https_client();
+
+#endif
 
         private:
 
             std::shared_ptr<detail::http_client> _http_client;
             boost::asio::any_io_executor _executor;
 
+#if WS_STREAMING_ENABLE_TLS
             std::unique_ptr<boost::asio::ssl::context> _ssl_context;
             std::shared_ptr<detail::https_client> _https_client;
             std::string _ca_file;
             std::string _cert_file;
             std::string _key_file;
             bool _verify_server = true;
+#endif
     };
 }

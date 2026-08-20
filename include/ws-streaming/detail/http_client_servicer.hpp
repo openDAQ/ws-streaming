@@ -10,7 +10,6 @@
 
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/post.hpp>
-#include <boost/asio/ssl/stream.hpp>
 #include <boost/beast/version.hpp>
 #include <boost/beast/core/error.hpp>
 #include <boost/beast/core/flat_buffer.hpp>
@@ -94,6 +93,8 @@ namespace wss::detail
             {
             }
 
+#if WS_STREAMING_ENABLE_TLS
+
             /**
              * Constructs a TLS servicer object, taking ownership of the specified socket and
              * wrapping it in a TLS stream. Only available for the TLS instantiation. The TLS
@@ -112,6 +113,8 @@ namespace wss::detail
             {
             }
 
+#endif
+
             /**
              * Activates the servicer by starting asynchronous I/O operations using the socket's
              * execution context. For the TLS instantiation, a TLS handshake is performed first. To
@@ -124,7 +127,7 @@ namespace wss::detail
                     tcp_layer().expires_after(std::chrono::seconds(30));
 
                     stream.async_handshake(
-                        boost::asio::ssl::stream_base::server,
+                        Stream::handshake_type::server,
                         [self_weak = this->weak_from_this()](const boost::system::error_code& ec)
                         {
                             if (auto self = self_weak.lock())
@@ -515,5 +518,8 @@ namespace wss::detail
     };
 
     using http_client_servicer = basic_http_client_servicer<boost::beast::tcp_stream>;
+
+#if WS_STREAMING_ENABLE_TLS
     using https_client_servicer = basic_http_client_servicer<boost::asio::ssl::stream<boost::beast::tcp_stream>>;
+#endif
 }

@@ -10,7 +10,6 @@
 
 #include <boost/asio/any_io_executor.hpp>
 #include <boost/asio/ip/tcp.hpp>
-#include <boost/asio/ssl/stream.hpp>
 #include <boost/beast/version.hpp>
 #include <boost/beast/core/flat_buffer.hpp>
 #include <boost/beast/core/tcp_stream.hpp>
@@ -75,6 +74,8 @@ namespace wss::detail
             {
             }
 
+#if WS_STREAMING_ENABLE_TLS
+
             /**
              * Constructs a TLS HTTP client object. Only available for the TLS instantiation.
              * Asynchronous socket operations will be dispatched using the specified execution context,
@@ -92,6 +93,8 @@ namespace wss::detail
                 , _stream(executor, ssl_context)
             {
             }
+
+#endif
 
             /**
              * Asynchronously performs a request. A client object can perform multiple
@@ -185,7 +188,7 @@ namespace wss::detail
                 if constexpr (is_tls)
                 {
                     _stream.async_handshake(
-                        boost::asio::ssl::stream_base::client,
+                        Stream::handshake_type::client,
                         [self_weak = this->weak_from_this()](const boost::system::error_code& ec)
                         {
                             if (auto self = self_weak.lock())
@@ -268,5 +271,8 @@ namespace wss::detail
     };
 
     using http_client = basic_http_client<boost::beast::tcp_stream>;
+
+#if WS_STREAMING_ENABLE_TLS
     using https_client = basic_http_client<boost::asio::ssl::stream<boost::beast::tcp_stream>>;
+#endif
 }
