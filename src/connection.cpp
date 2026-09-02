@@ -299,6 +299,22 @@ void wss::connection::on_local_signal_data_published(
         }
     }
 
+    else if (entry->is_explicit && entry->domain_signo != 0 && domain_value != 0)
+    {
+        // For value signals whose domain uses ExplicitDataRule, domain_table is null
+        // (no linear_table is created for Explicit-rule signals) so the block above
+        // is never entered.  domain_value is the per-sample hardware timestamp (the
+        // domain packet's offset, extracted by WsStreamingListener).  Forward it as
+        // a linear_payload so the client can reconstruct timestamps directly without
+        // relying on the ordering of a separately-delivered domain-signal data packet.
+        detail::streaming_protocol::linear_payload payload;
+        payload.sample_index = boost::endian::native_to_little(entry->value_index);
+        payload.value        = boost::endian::native_to_little(domain_value);
+        _peer->send_data(
+            entry->domain_signo,
+            boost::asio::const_buffer{&payload, sizeof(payload)});
+    }
+
     _peer->send_data(
         entry->signo,
         boost::asio::const_buffer{data, size});
