@@ -19,7 +19,7 @@ else()
         FetchContent_Declare(nlohmann_json
             GIT_REPOSITORY  https://github.com/nlohmann/json
             GIT_TAG         v3.10.5
-            GIT_SHALLOW
+            GIT_SHALLOW     TRUE
             OVERRIDE_FIND_PACKAGE
         )
 
