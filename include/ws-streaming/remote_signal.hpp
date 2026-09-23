@@ -15,6 +15,9 @@ namespace wss
     {
         public:
 
+            // Subscribe and unsubscribe requests reach the peer in call order. Over an HTTP command
+            // interface, a request without an answer within 2 s is sent once more, then dropped;
+            // any HTTP response, whatever its status or body, is final.
             virtual void subscribe() = 0;
             virtual void unsubscribe() = 0;
 
