@@ -4,6 +4,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <thread>
 #include <vector>
@@ -18,6 +19,7 @@
 #include <nlohmann/json.hpp>
 
 #include <ws-streaming/ws-streaming.hpp>
+#include <ws-streaming/detail/http_client.hpp>
 #include <ws-streaming/detail/http_command_interface_client.hpp>
 #include <ws-streaming/detail/peer.hpp>
 
@@ -385,4 +387,31 @@ TEST(HttpCommandInterface, CloseDoesNotWaitForAStalledRequest)
     client.ioc.run_for(10s);
     EXPECT_LT(std::chrono::steady_clock::now() - start, 1s);
     EXPECT_EQ(server.arrivals(), std::vector<std::string>{ "a" });
+}
+
+TEST(HttpClient, CancelBetweenTwoStepsEndsTheRequest)
+{
+    boost::asio::io_context ioc{1};
+
+    // a port nobody listens on, so a request that goes on fails to connect instead of ending as canceled
+    std::uint16_t port;
+    {
+        boost::asio::ip::tcp::acceptor acceptor{ioc, {boost::asio::ip::make_address("127.0.0.1"), 0}};
+        port = acceptor.local_endpoint().port();
+    }
+
+    auto client = std::make_shared<wss::detail::http_client>(ioc.get_executor());
+    std::optional<boost::system::error_code> result;
+
+    client->async_request("127.0.0.1", std::to_string(port),
+        boost::beast::http::request<boost::beast::http::string_body>{boost::beast::http::verb::post, "/", 11},
+        [&result](const boost::system::error_code& ec, const auto&, auto&, const auto&) { result = ec; });
+
+    // the resolver finishes on its own thread and queues its handler, which waits for ioc to run
+    std::this_thread::sleep_for(200ms);
+    client->cancel();
+    ioc.run_for(10s);
+
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(*result, boost::asio::error::operation_aborted);
 }
