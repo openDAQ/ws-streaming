@@ -106,13 +106,13 @@ void wss::detail::http_command_interface_client::send_front()
 
     // the handler owns the client until it runs, so an abandoned attempt can complete safely
     client->async_request(_hostname, _port, std::move(request),
-        [this, client](
+        [this, client, lifetime = std::weak_ptr<int>(_lifetime)](
             const boost::system::error_code& ec,
             const boost::beast::http::response<boost::beast::http::string_body>& response,
             boost::beast::tcp_stream& /*stream*/,
             const boost::beast::flat_buffer& /*buffer*/)
         {
-            if (ec == boost::asio::error::operation_aborted || client != _client)
+            if (lifetime.expired() || ec == boost::asio::error::operation_aborted || client != _client)
                 return;
 
             if (ec)
@@ -138,10 +138,10 @@ void wss::detail::http_command_interface_client::send_front()
 
     _timer.expires_after(request_timeout);
     _timer.async_wait(
-        [this](const boost::system::error_code& ec)
+        [this, lifetime = std::weak_ptr<int>(_lifetime)](const boost::system::error_code& ec)
         {
             // a wait that completed before a later attempt moved the expiry must not time that attempt out
-            if (!ec && _client && _timer.expiry() <= boost::asio::steady_timer::clock_type::now())
+            if (!ec && !lifetime.expired() && _client && _timer.expiry() <= boost::asio::steady_timer::clock_type::now())
                 on_no_answer(boost::asio::error::timed_out);
         });
 }

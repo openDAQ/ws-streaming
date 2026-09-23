@@ -79,5 +79,6 @@ namespace wss::detail
             std::deque<request> _requests;                  // the front one is in flight
             std::shared_ptr<detail::http_client> _client;   // the attempt in flight, set while _requests is not empty
             boost::asio::steady_timer _timer;               // times out the attempt in flight
+            std::shared_ptr<int> _lifetime = std::make_shared<int>();  // expires with this object; a handler queued before that checks it first
     };
 }
