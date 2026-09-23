@@ -133,6 +133,9 @@ void wss::connection::run(const void *data, std::size_t size)
 
 void wss::connection::close()
 {
+    if (_command_interface_client)
+        _command_interface_client->cancel();
+
     _peer->stop();
 }
 

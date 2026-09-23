@@ -368,3 +368,21 @@ TEST(HttpCommandInterface, IntegerPortReachesTheServer)
     EXPECT_TRUE(client.run_until([&] { return !server.arrivals().empty(); }, 5s));
     EXPECT_EQ(server.arrivals(), std::vector<std::string>{ "a" });
 }
+
+TEST(HttpCommandInterface, CloseDoesNotWaitForAStalledRequest)
+{
+    fake_jsonrpc_http_server server;
+    server.script("a", { action::stall });
+    fake_http_peer peer{server.port()};
+    subscribing_client client{peer.url()};
+
+    ASSERT_TRUE(client.run_until([&] { return !server.arrivals().empty(); }, 5s));
+
+    client.connection->close();
+
+    // the connection's work ends at once, without waiting for the stalled request to time out
+    const auto start = std::chrono::steady_clock::now();
+    client.ioc.run_for(10s);
+    EXPECT_LT(std::chrono::steady_clock::now() - start, 1s);
+    EXPECT_EQ(server.arrivals(), std::vector<std::string>{ "a" });
+}
