@@ -189,6 +189,12 @@ class fake_http_peer
             return "ws://127.0.0.1:" + std::to_string(_acceptor.local_endpoint().port()) + "/";
         }
 
+        // closes the WebSocket from the peer's side
+        void close()
+        {
+            boost::asio::post(_ioc, [this] { if (_peer) _peer->stop(); });
+        }
+
     private:
 
         void upgrade(std::shared_ptr<boost::asio::ip::tcp::socket> socket)
@@ -383,6 +389,24 @@ TEST(HttpCommandInterface, CloseDoesNotWaitForAStalledRequest)
     client.connection->close();
 
     // the connection's work ends at once, without waiting for the stalled request to time out
+    const auto start = std::chrono::steady_clock::now();
+    client.ioc.run_for(10s);
+    EXPECT_LT(std::chrono::steady_clock::now() - start, 1s);
+    EXPECT_EQ(server.arrivals(), std::vector<std::string>{ "a" });
+}
+
+TEST(HttpCommandInterface, PeerCloseEndsAStalledRequest)
+{
+    fake_jsonrpc_http_server server;
+    server.script("a", { action::stall });
+    fake_http_peer peer{server.port()};
+    subscribing_client client{peer.url()};
+
+    ASSERT_TRUE(client.run_until([&] { return !server.arrivals().empty(); }, 5s));
+
+    peer.close();
+
+    // the connection's work ends once it sees the close, without resending the stalled request
     const auto start = std::chrono::steady_clock::now();
     client.ioc.run_for(10s);
     EXPECT_LT(std::chrono::steady_clock::now() - start, 1s);

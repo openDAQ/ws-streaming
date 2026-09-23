@@ -295,6 +295,10 @@ void wss::connection::on_peer_closed(
 
     clear_local_signals();
 
+    // the peer is gone, so the requests still queued or in flight have no one to reach
+    if (_command_interface_client)
+        _command_interface_client->cancel();
+
     on_disconnected(ec);
 }
 
