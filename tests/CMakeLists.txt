@@ -1,6 +1,7 @@
 set(sources
     ./test_base64.cpp
     ./test_client.cpp
+    ./test_command_interface_client_factory.cpp
     ./test_dynamic_buffer.cpp
     ./test_metadata.cpp
     ./test_peer_limits.cpp
