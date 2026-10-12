@@ -1,4 +1,3 @@
-#include <iostream>
 #include <string>
 
 #include <nlohmann/json.hpp>
@@ -15,7 +14,6 @@ wss::struct_field::struct_field()
 wss::struct_field::struct_field(const nlohmann::json& json)
     : _json(json.is_object() ? json : nlohmann::json::object())
 {
-    std::cout << "struct_field constructed with " << json.dump() << std::endl;
 }
 
 std::string wss::struct_field::data_type() const

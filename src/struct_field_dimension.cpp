@@ -1,4 +1,3 @@
-#include <iostream>
 #include <optional>
 #include <string>
 #include <tuple>
@@ -16,7 +15,6 @@ wss::struct_field_dimension::struct_field_dimension()
 wss::struct_field_dimension::struct_field_dimension(const nlohmann::json& json)
     : _json(json.is_object() ? json : nlohmann::json::object())
 {
-    std::cout << "struct_field dimension constructed with " << json.dump() << std::endl;
 }
 
 std::tuple<
