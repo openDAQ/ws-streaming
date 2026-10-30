@@ -41,6 +41,21 @@ namespace wss
                 std::uint64_t size);
 
             /**
+             * Gives the dimension a linear rule with real-valued starting point and delta, such
+             * as the frequency axis of a spectrum whose bin width is not an integer.
+             *
+             * @param start The initial value of the dimension.
+             * @param delta The amount by which the dimension's value increases for each element.
+             * @param size The total number of elements in the dimension.
+             *
+             * @return A reference to this object.
+             */
+            dimension_builder& linear_rule_real(
+                double start,
+                double delta,
+                std::uint64_t size);
+
+            /**
              * Gets a JSON representation of this dimension.
              *
              * @return A JSON representation of this dimension.

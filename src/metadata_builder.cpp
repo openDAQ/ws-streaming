@@ -3,6 +3,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <ws-streaming/dimension_builder.hpp>
 #include <ws-streaming/metadata_builder.hpp>
 #include <ws-streaming/rule_types.hpp>
 #include <ws-streaming/struct_field_builder.hpp>
@@ -61,6 +62,18 @@ wss::metadata_builder& wss::metadata_builder::data_type(
     const std::string& type)
 {
     _metadata["definition"]["dataType"] = type;
+
+    return *this;
+}
+
+wss::metadata_builder& wss::metadata_builder::dimension(
+    const dimension_builder& dimension)
+{
+    if (!_metadata["definition"].contains("dimensions") ||
+            !_metadata["definition"]["dimensions"].is_array())
+        _metadata["definition"]["dimensions"] = nlohmann::json::array();
+
+    _metadata["definition"]["dimensions"].push_back(dimension.build());
 
     return *this;
 }

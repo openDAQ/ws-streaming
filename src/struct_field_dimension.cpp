@@ -69,3 +69,8 @@ std::string wss::struct_field_dimension::rule() const
 
     return rule_types::explicit_rule;
 }
+
+const nlohmann::json& wss::struct_field_dimension::json() const noexcept
+{
+    return _json;
+}

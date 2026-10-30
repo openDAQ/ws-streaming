@@ -5,6 +5,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <ws-streaming/dimension_builder.hpp>
 #include <ws-streaming/struct_field_builder.hpp>
 #include <ws-streaming/unit.hpp>
 
@@ -65,6 +66,18 @@ namespace wss
              */
             metadata_builder& data_type(
                 const std::string& type);
+
+            /**
+             * Adds a dimension to the signal's value, making each sample a vector (one
+             * dimension) or matrix (two or more dimensions) of the signal's data type, such as
+             * the bins of a spectrum.
+             *
+             * @param dimension A builder object used to generate the dimension description.
+             *
+             * @return A reference to this object.
+             */
+            metadata_builder& dimension(
+                const dimension_builder& dimension);
 
             /**
              * Sets the endianness of the signal. The wss::endianness namespace contains constants

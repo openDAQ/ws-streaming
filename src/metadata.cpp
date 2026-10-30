@@ -262,6 +262,10 @@ std::size_t wss::metadata::sample_size() const
         }
     }
 
+    for (const auto& dim : dimensions())
+        if (auto element_count = std::get<2>(dim.linear_start_delta_size()); element_count.value_or(0) > 0)
+            size *= static_cast<std::size_t>(element_count.value());
+
     return size;
 }
 

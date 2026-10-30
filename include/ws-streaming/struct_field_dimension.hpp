@@ -59,6 +59,14 @@ namespace wss
              */
             std::string rule() const;
 
+            /**
+             * Gets the raw JSON description of this dimension, e.g. to read real-valued
+             * linear-rule parameters that linear_start_delta_size() would truncate.
+             *
+             * @return The raw JSON description of this dimension.
+             */
+            const nlohmann::json& json() const noexcept;
+
         private:
 
             nlohmann::json _json;

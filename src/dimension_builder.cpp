@@ -32,6 +32,23 @@ wss::dimension_builder& wss::dimension_builder::linear_rule(
     return *this;
 }
 
+wss::dimension_builder& wss::dimension_builder::linear_rule_real(
+    double start,
+    double delta,
+    std::uint64_t size)
+{
+    _dimension["rule"] = rule_types::linear_rule;
+
+    _dimension["linear"] =
+    {
+        { "start", start },
+        { "delta", delta },
+        { "size", size },
+    };
+
+    return *this;
+}
+
 const nlohmann::json& wss::dimension_builder::build() const noexcept
 {
     return _dimension;

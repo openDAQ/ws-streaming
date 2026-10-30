@@ -61,6 +61,32 @@ namespace wss
             std::string data_type() const;
 
             /**
+             * Populates and returns a container with the dimensions of the signal's value. A
+             * signal with one or more dimensions transfers a vector or matrix of its data type
+             * in each sample.
+             *
+             * @tparam Container A sequence container of struct_field_dimension objects which can
+             *     be default-constructed and which has an emplace_back() member function.
+             *
+             * @return The dimensions of the signal's value, or an empty (default-constructed)
+             *     container if the signal's value is a scalar.
+             */
+            template <typename Container = std::vector<struct_field_dimension>>
+            Container dimensions() const
+            {
+                Container container;
+
+                if (_json.contains("definition")
+                        && _json["definition"].is_object()
+                        && _json["definition"].contains("dimensions")
+                        && _json["definition"]["dimensions"].is_array())
+                    for (const auto& dim : _json["definition"]["dimensions"])
+                        container.emplace_back(dim);
+
+                return container;
+            }
+
+            /**
              * Gets the endianness of the signal. The wss::endianness namespace contains constants
              * for the endianness strings specified by the WebSocket Streaming Protocol
              * specification. User-defined data types are allowed, but probably do not make sense.
@@ -138,7 +164,8 @@ namespace wss
 
             /**
              * Calculates the size of a sample, if fixed and if the data type is one recognized by
-             * the WebSocket Streaming Protocol specification.
+             * the WebSocket Streaming Protocol specification. If the signal's value has
+             * linear-rule dimensions, a sample holds all of their elements.
              *
              * @return The size of a single sample of this signal, in bytes. The return value is
              *     zero if the signal is not explicit-rule, or if the data type is unknown or
