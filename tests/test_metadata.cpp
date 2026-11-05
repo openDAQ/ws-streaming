@@ -30,13 +30,13 @@ TEST(MetadataTest, LinearStartDeltaFromInterpretation)
     EXPECT_EQ(delta, std::optional<std::int64_t>(7));
 }
 
-TEST(MetadataTest, LinearStartDeltaFromDefinition)
+TEST(MetadataTest, LinearDeltaFromDefinitionWithoutStart)
 {
     auto [start, delta] = parse(R"({
         "definition": { "rule": "linear", "linear": { "start": 200, "delta": 9 } }
     })").linear_start_delta();
 
-    EXPECT_EQ(start, std::optional<std::int64_t>(200));
+    EXPECT_EQ(start, std::nullopt);
     EXPECT_EQ(delta, std::optional<std::int64_t>(9));
 }
 
@@ -127,4 +127,32 @@ TEST(MetadataTest, UnitPrefersInterpretation)
 TEST(MetadataTest, UnitAbsent)
 {
     EXPECT_EQ(parse(R"({ "definition": { "rule": "explicit" } })").unit(), std::nullopt);
+}
+
+TEST(MetadataTest, OriginFromAbsoluteReference)
+{
+    EXPECT_EQ(parse(R"({
+        "definition": { "rule": "linear", "absoluteReference": "1970-01-01T00:00:00.0" }
+    })").origin(), "1970-01-01T00:00:00.0");
+}
+
+TEST(MetadataTest, OriginPrefersOriginOverAbsoluteReference)
+{
+    EXPECT_EQ(parse(R"({
+        "definition": { "rule": "linear", "absoluteReference": "1970-01-01" },
+        "interpretation": { "origin": "1970-01-01T00:00:00Z" }
+    })").origin(), "1970-01-01T00:00:00Z");
+}
+
+TEST(MetadataTest, OriginFromAbsoluteReferenceWhenOriginIsEmpty)
+{
+    EXPECT_EQ(parse(R"({
+        "definition": { "rule": "linear", "origin": "", "absoluteReference": "1970-01-01" },
+        "interpretation": { "origin": "" }
+    })").origin(), "1970-01-01");
+}
+
+TEST(MetadataTest, OriginEmptyAbsoluteReference)
+{
+    EXPECT_EQ(parse(R"({ "definition": { "rule": "linear", "absoluteReference": "" } })").origin(), "");
 }
