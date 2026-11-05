@@ -3,6 +3,7 @@ set(sources
     ./test_client.cpp
     ./test_dynamic_buffer.cpp
     ./test_http_client.cpp
+    ./test_http_command_interface.cpp
     ./test_metadata.cpp
     ./test_peer_limits.cpp
     ./test_semver.cpp
