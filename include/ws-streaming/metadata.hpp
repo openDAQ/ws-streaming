@@ -115,7 +115,9 @@ namespace wss
 
             /**
              * Gets the origin string of this signal. For time signals, this value is an ISO 8601
-             * date/time string specifying the calendar time represented by zero ticks.
+             * date/time string specifying the calendar time represented by zero ticks. It is taken
+             * from a non-empty "origin" in the definition or the interpretation, or else from
+             * "absoluteReference" in the definition.
              *
              * @return The origin string of this signal, or an empty string if not set.
              */

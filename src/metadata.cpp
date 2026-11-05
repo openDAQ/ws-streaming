@@ -171,14 +171,23 @@ std::string wss::metadata::origin() const
     if (_json.contains("definition")
             && _json["definition"].is_object()
             && _json["definition"].contains("origin")
-            && _json["definition"]["origin"].is_string())
+            && _json["definition"]["origin"].is_string()
+            && _json["definition"]["origin"] != "")
         return _json["definition"]["origin"];
 
     if (_json.contains("interpretation")
             && _json["interpretation"].is_object()
             && _json["interpretation"].contains("origin")
-            && _json["interpretation"]["origin"].is_string())
+            && _json["interpretation"]["origin"].is_string()
+            && _json["interpretation"]["origin"] != "")
         return _json["interpretation"]["origin"];
+
+    // the LT streaming specification's name for the origin (renamed from "origin" in version 1.0.1)
+    if (_json.contains("definition")
+            && _json["definition"].is_object()
+            && _json["definition"].contains("absoluteReference")
+            && _json["definition"]["absoluteReference"].is_string())
+        return _json["definition"]["absoluteReference"];
 
     return "";
 }
