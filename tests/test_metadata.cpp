@@ -30,13 +30,13 @@ TEST(MetadataTest, LinearStartDeltaFromInterpretation)
     EXPECT_EQ(delta, std::optional<std::int64_t>(7));
 }
 
-TEST(MetadataTest, LinearStartDeltaFromDefinition)
+TEST(MetadataTest, LinearDeltaFromDefinitionWithoutStart)
 {
     auto [start, delta] = parse(R"({
         "definition": { "rule": "linear", "linear": { "start": 200, "delta": 9 } }
     })").linear_start_delta();
 
-    EXPECT_EQ(start, std::optional<std::int64_t>(200));
+    EXPECT_EQ(start, std::nullopt);
     EXPECT_EQ(delta, std::optional<std::int64_t>(9));
 }
 

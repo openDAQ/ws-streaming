@@ -97,10 +97,8 @@ std::pair<
         {
             const auto& linear = _json["definition"]["linear"];
 
-            if (auto element = linear.value<nlohmann::json>("start", nullptr);
-                    element.is_number())
-                start = element;
-
+            // the specification's "start" is the absolute value of the next sample, which the
+            // implicit linear data also carries; it is not a rule start
             if (auto element = linear.value<nlohmann::json>("delta", nullptr);
                     element.is_number())
                 delta = element;

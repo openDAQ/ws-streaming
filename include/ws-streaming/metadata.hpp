@@ -93,7 +93,10 @@ namespace wss
             }
 
             /**
-             * Gets the signal's linear-rule start and delta parameters.
+             * Gets the signal's linear-rule start and delta parameters. Both are taken from the
+             * openDAQ "interpretation" if present. Otherwise the delta is taken from "linear" in the
+             * definition and the start is missing: the specification's "linear.start" is the
+             * absolute value of the next sample, which the signal's implicit linear data carries.
              *
              * @return A pair containing the signal's linear-rule start and delta parameters, in
              *     that order. If the signal does not have a linear rule, or one of the parameters
