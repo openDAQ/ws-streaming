@@ -17,7 +17,9 @@
 
 #include <nlohmann/json.hpp>
 
+#include <ws-streaming/ws-streaming.hpp>
 #include <ws-streaming/detail/http_command_interface_client.hpp>
+#include <ws-streaming/detail/peer.hpp>
 
 using namespace std::chrono_literals;
 
@@ -155,6 +157,122 @@ struct result
     std::string signal_id;
     boost::system::error_code ec;
     nlohmann::json response;
+};
+
+// A WebSocket Streaming peer that announces signal "a" and a "jsonrpc-http" command interface on
+// the given port, written as a JSON integer. It accepts the WebSocket upgrade on a raw socket;
+// the client only checks the status line.
+class fake_http_peer
+{
+    public:
+
+        explicit fake_http_peer(std::uint16_t command_port)
+            : _command_port(command_port)
+            , _acceptor(_ioc, {boost::asio::ip::make_address("127.0.0.1"), 0})
+        {
+            _acceptor.async_accept(
+                [this](const boost::system::error_code& ec, boost::asio::ip::tcp::socket socket)
+                {
+                    if (!ec)
+                        upgrade(std::make_shared<boost::asio::ip::tcp::socket>(std::move(socket)));
+                });
+
+            _thread = std::thread([this] { _ioc.run(); });
+        }
+
+        ~fake_http_peer()
+        {
+            _ioc.stop();
+            _thread.join();
+        }
+
+        std::string url() const
+        {
+            return "ws://127.0.0.1:" + std::to_string(_acceptor.local_endpoint().port()) + "/";
+        }
+
+    private:
+
+        void upgrade(std::shared_ptr<boost::asio::ip::tcp::socket> socket)
+        {
+            auto buffer = std::make_shared<boost::asio::streambuf>();
+
+            boost::asio::async_read_until(*socket, *buffer, "\r\n\r\n",
+                [this, socket, buffer](const boost::system::error_code& ec, std::size_t)
+                {
+                    if (ec)
+                        return;
+
+                    boost::asio::async_write(*socket, boost::asio::buffer(_upgrade_response),
+                        [this, socket](const boost::system::error_code& ec, std::size_t)
+                        {
+                            if (!ec)
+                                start(std::move(*socket));
+                        });
+                });
+        }
+
+        void start(boost::asio::ip::tcp::socket socket)
+        {
+            _peer = std::make_shared<wss::detail::peer>(std::move(socket), false);
+            _peer->run();
+
+            _peer->send_metadata(0, "apiVersion", { { "version", "1.0.0" } });
+            _peer->send_metadata(0, "init", {
+                { "streamId", "FAKE" },
+                { "commandInterfaces", { { "jsonrpc-http", {
+                    { "httpMethod", "POST" },
+                    { "httpPath", "/" },
+                    { "httpVersion", "1.1" },
+                    { "port", _command_port },
+                } } } },
+            });
+            _peer->send_metadata(0, "available", { { "signalIds", { "a" } } });
+        }
+
+        const std::uint16_t _command_port;
+        const std::string _upgrade_response =
+            "HTTP/1.1 101 Switching Protocols\r\n"
+            "Upgrade: websocket\r\n"
+            "Connection: Upgrade\r\n"
+            "Sec-WebSocket-Accept: fake\r\n"
+            "\r\n";
+
+        boost::asio::io_context _ioc{1};
+        boost::asio::ip::tcp::acceptor _acceptor;
+        std::thread _thread;
+
+        std::shared_ptr<wss::detail::peer> _peer;
+};
+
+// A client connection that subscribes signal "a" as soon as the peer announces it.
+struct subscribing_client
+{
+    explicit subscribing_client(const std::string& url)
+    {
+        client.async_connect(url,
+            [this](const boost::system::error_code& ec, wss::connection_ptr c)
+            {
+                ASSERT_FALSE(ec) << ec.message();
+                connection = c;
+                on_available = c->on_available.connect(
+                    [](wss::remote_signal_ptr signal) { signal->subscribe(); });
+            });
+    }
+
+    template <typename Predicate>
+    bool run_until(Predicate done, std::chrono::milliseconds timeout)
+    {
+        const auto deadline = std::chrono::steady_clock::now() + timeout;
+        while (!done() && std::chrono::steady_clock::now() < deadline)
+            ioc.run_for(10ms);
+        return done();
+    }
+
+    boost::asio::io_context ioc{1};
+    wss::client client{ioc.get_executor()};
+    wss::connection_ptr connection;
+    boost::signals2::scoped_connection on_available;
 };
 
 }
@@ -351,4 +469,14 @@ TEST(HttpCommandInterface, DestroyingTheClientBeforeItsRequestIsSentSendsNothing
     ioc.run_for(5s);
     EXPECT_FALSE(called);
     EXPECT_TRUE(server.arrivals().empty()) << "the request was sent after the client was destroyed";
+}
+
+TEST(HttpCommandInterface, IntegerPortReachesTheServer)
+{
+    fake_jsonrpc_http_server server;
+    fake_http_peer peer{server.port()};
+    subscribing_client client{peer.url()};
+
+    EXPECT_TRUE(client.run_until([&] { return !server.arrivals().empty(); }, 5s));
+    EXPECT_EQ(server.arrivals(), std::vector<std::string>{ "a" });
 }
