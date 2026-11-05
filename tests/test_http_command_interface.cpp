@@ -191,6 +191,18 @@ class fake_http_peer
             return "ws://127.0.0.1:" + std::to_string(_acceptor.local_endpoint().port()) + "/";
         }
 
+        // closes the WebSocket from the peer's side
+        void close()
+        {
+            boost::asio::post(_ioc, [this] { if (_peer) _peer->stop(); });
+        }
+
+        // tells the client that signal "a" is subscribed, as a device does once it has run the subscribe request
+        void acknowledge_subscribe()
+        {
+            boost::asio::post(_ioc, [this] { if (_peer) _peer->send_metadata(1, "subscribe", { { "signalId", "a" } }); });
+        }
+
     private:
 
         void upgrade(std::shared_ptr<boost::asio::ip::tcp::socket> socket)
@@ -245,7 +257,9 @@ class fake_http_peer
         std::shared_ptr<wss::detail::peer> _peer;
 };
 
-// A client connection that subscribes signal "a" as soon as the peer announces it.
+// A client connection that subscribes signal "a" as soon as the peer announces it. Like the LT client
+// module with a subscription it holds, it releases the subscription when the signal reports itself
+// unsubscribed, which a closing connection does for each subscribed signal.
 struct subscribing_client
 {
     explicit subscribing_client(const std::string& url)
@@ -256,7 +270,14 @@ struct subscribing_client
                 ASSERT_FALSE(ec) << ec.message();
                 connection = c;
                 on_available = c->on_available.connect(
-                    [](wss::remote_signal_ptr signal) { signal->subscribe(); });
+                    [this](wss::remote_signal_ptr signal)
+                    {
+                        // the signal itself raises these, so it is alive while they run
+                        on_subscribed = signal->on_subscribed.connect([this] { subscribed = true; });
+                        on_unsubscribed = signal->on_unsubscribed.connect(
+                            [this, s = signal.get()] { subscribed = false; s->unsubscribe(); });
+                        signal->subscribe();
+                    });
             });
     }
 
@@ -272,7 +293,10 @@ struct subscribing_client
     boost::asio::io_context ioc{1};
     wss::client client{ioc.get_executor()};
     wss::connection_ptr connection;
+    bool subscribed = false;
     boost::signals2::scoped_connection on_available;
+    boost::signals2::scoped_connection on_subscribed;
+    boost::signals2::scoped_connection on_unsubscribed;
 };
 
 }
@@ -479,4 +503,58 @@ TEST(HttpCommandInterface, IntegerPortReachesTheServer)
 
     EXPECT_TRUE(client.run_until([&] { return !server.arrivals().empty(); }, 5s));
     EXPECT_EQ(server.arrivals(), std::vector<std::string>{ "a" });
+}
+
+TEST(HttpCommandInterface, CloseDoesNotWaitForAStalledRequest)
+{
+    fake_jsonrpc_http_server server;
+    server.script("a", { action::stall });
+    fake_http_peer peer{server.port()};
+    subscribing_client client{peer.url()};
+
+    ASSERT_TRUE(client.run_until([&] { return !server.arrivals().empty(); }, 5s));
+
+    client.connection->close();
+
+    // the close cancels the stalled request: it is not resent once its timeout passes, and no work is left
+    client.ioc.run_for(10s);
+    EXPECT_TRUE(client.ioc.stopped()) << "work was left behind after the close";
+    EXPECT_EQ(server.arrivals(), std::vector<std::string>{ "a" });
+}
+
+TEST(HttpCommandInterface, PeerCloseEndsAStalledRequest)
+{
+    fake_jsonrpc_http_server server;
+    server.script("a", { action::stall });
+    fake_http_peer peer{server.port()};
+    subscribing_client client{peer.url()};
+
+    ASSERT_TRUE(client.run_until([&] { return !server.arrivals().empty(); }, 5s));
+
+    peer.close();
+
+    // the connection cancels the stalled request once it sees the close: no resend, and no work is left
+    client.ioc.run_for(10s);
+    EXPECT_TRUE(client.ioc.stopped()) << "work was left behind after the close";
+    EXPECT_EQ(server.arrivals(), std::vector<std::string>{ "a" });
+}
+
+// A closing connection reports each subscribed signal unsubscribed, and a client that then releases its
+// subscription, as the LT client module does, makes an unsubscribe request while the connection closes.
+// The connection cancels its requests after that, so the request does not go out to the peer that is gone.
+TEST(HttpCommandInterface, UnsubscribeMadeWhileThePeerClosesIsNotSent)
+{
+    fake_jsonrpc_http_server server;
+    fake_http_peer peer{server.port()};
+    subscribing_client client{peer.url()};
+
+    ASSERT_TRUE(client.run_until([&] { return !server.arrivals().empty(); }, 5s));
+    peer.acknowledge_subscribe();
+    ASSERT_TRUE(client.run_until([&] { return client.subscribed; }, 5s));
+
+    peer.close();
+
+    client.ioc.run_for(10s);
+    EXPECT_TRUE(client.ioc.stopped()) << "work was left behind after the close";
+    EXPECT_EQ(server.arrivals(), std::vector<std::string>{ "a" }) << "the unsubscribe made during the close was sent";
 }
