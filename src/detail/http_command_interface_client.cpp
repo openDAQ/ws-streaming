@@ -1,4 +1,3 @@
-#include <chrono>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -7,7 +6,6 @@
 
 #include <boost/asio/any_io_executor.hpp>
 #include <boost/asio/error.hpp>
-#include <boost/asio/steady_timer.hpp>
 #include <boost/beast/core/flat_buffer.hpp>
 #include <boost/beast/core/tcp_stream.hpp>
 #include <boost/beast/http.hpp>
@@ -29,22 +27,19 @@ wss::detail::http_command_interface_client::http_command_interface_client(
         const std::string& port,
         const std::string& http_method,
         const std::string& path,
-        const std::string& version,
-        std::chrono::steady_clock::duration request_timeout)
+        const std::string& version)
     : _executor(executor)
     , _hostname(hostname)
     , _port(port)
     , _http_method(http_method)
     , _path(path)
     , _version(version)
-    , _request_timeout(request_timeout)
-    , _timer(executor)
 {
 }
 
 wss::detail::http_command_interface_client::~http_command_interface_client()
 {
-    // the attempt in flight lives until its handler runs; the cancel makes that handler return at once
+    // the request in flight lives until its handler runs; the cancel makes that handler return at once
     if (_client)
         _client->cancel();
 }
@@ -76,8 +71,6 @@ void wss::detail::http_command_interface_client::cancel()
     if (_client)
         std::exchange(_client, nullptr)->cancel();
 
-    _timer.cancel();
-
     decltype(_requests) old_requests;
     std::swap(_requests, old_requests);
 
@@ -95,12 +88,11 @@ void wss::detail::http_command_interface_client::send_front()
     request.set(boost::beast::http::field::content_type, "application/json");
     request.set(boost::beast::http::field::host, _hostname);
     request.body() = _requests.front().body;
-    ++_requests.front().attempts;
 
     auto client = std::make_shared<detail::http_client>(_executor);
     _client = client;
 
-    // the handler owns the client until it runs, so an abandoned attempt can complete safely
+    // the handler owns the client until it runs, so a canceled request can complete safely
     client->async_request(_hostname, _port, std::move(request),
         [this, client, lifetime = std::weak_ptr<int>(_lifetime)](
             const boost::system::error_code& ec,
@@ -112,9 +104,8 @@ void wss::detail::http_command_interface_client::send_front()
                 return;
 
             if (ec)
-                return on_no_answer(ec);
+                return complete_front(ec, nullptr);
 
-            // a peer that answered has seen the request, so the answer is final whatever it says
             if (response.result_int() < 200 || response.result_int() >= 400)
                 return complete_front(boost::beast::http::error::bad_status, nullptr);
 
@@ -131,26 +122,6 @@ void wss::detail::http_command_interface_client::send_front()
 
             complete_front({}, response_json);
         });
-
-    _timer.expires_after(_request_timeout);
-    _timer.async_wait(
-        [this, lifetime = std::weak_ptr<int>(_lifetime)](const boost::system::error_code& ec)
-        {
-            // a wait that completed before a later attempt moved the expiry must not time that attempt out
-            if (!ec && !lifetime.expired() && _client && _timer.expiry() <= boost::asio::steady_timer::clock_type::now())
-                on_no_answer(boost::asio::error::timed_out);
-        });
-}
-
-void wss::detail::http_command_interface_client::on_no_answer(
-    const boost::system::error_code& ec)
-{
-    std::exchange(_client, nullptr)->cancel();
-
-    if (_requests.front().attempts < MAX_ATTEMPTS)
-        send_front();
-    else
-        complete_front(ec, nullptr);
 }
 
 void wss::detail::http_command_interface_client::complete_front(
@@ -158,7 +129,6 @@ void wss::detail::http_command_interface_client::complete_front(
     const nlohmann::json& response)
 {
     _client.reset();
-    _timer.cancel();
 
     auto handler = std::move(_requests.front().handler);
     _requests.pop_front();
