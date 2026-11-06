@@ -34,7 +34,7 @@ wss::detail::command_interface_client_factory::create_client(
     {
         std::string port;
         if (interfaces["jsonrpc-http"]["port"].is_number_integer())
-            port = std::to_string(interfaces["jsonrpc-http"]["port"].is_number_integer());
+            port = std::to_string(interfaces["jsonrpc-http"]["port"].get<std::int64_t>());
         else
             port = interfaces["jsonrpc-http"]["port"];
 
