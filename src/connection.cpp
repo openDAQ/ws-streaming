@@ -1,10 +1,12 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <functional>
 #include <map>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include <boost/asio/dispatch.hpp>
 #include <boost/asio/ip/tcp.hpp>
@@ -144,6 +146,7 @@ void wss::connection::add_local_signal(local_signal& signal)
     {
         auto rule = signal.metadata().rule();
         entry->is_explicit = rule == rule_types::explicit_rule;
+        entry->is_constant = rule == rule_types::constant_rule;
 
         if (rule == rule_types::linear_rule)
             entry->table = std::make_shared<detail::linear_table>(signal.metadata());
@@ -305,6 +308,7 @@ void wss::connection::refresh_local_signal_bindings(
     auto rule = entry.signal.metadata().rule();
 
     entry.is_explicit = rule == rule_types::explicit_rule;
+    entry.is_constant = rule == rule_types::constant_rule;
 
     if (rule == rule_types::linear_rule)
     {
@@ -350,6 +354,23 @@ void wss::connection::on_local_signal_data_published(
     std::size_t size)
 {
     auto domain_table = entry->domain_table.lock();
+
+    // A constant-rule value goes out as an entry: the value index of its domain value, then the value. The
+    // client maps the index back through the same table, so the value keeps its domain value; the table does not move.
+    if (entry->is_constant)
+    {
+        const std::uint64_t index = boost::endian::native_to_little(
+            static_cast<std::uint64_t>(domain_table ? domain_table->index_at(domain_value) : 0));
+
+        std::vector<std::uint8_t> payload(sizeof(index) + size);
+        std::memcpy(payload.data(), &index, sizeof(index));
+        std::memcpy(payload.data() + sizeof(index), data, size);
+
+        _peer->send_data(
+            entry->signo,
+            boost::asio::const_buffer{payload.data(), payload.size()});
+        return;
+    }
 
     if (domain_table)
     {

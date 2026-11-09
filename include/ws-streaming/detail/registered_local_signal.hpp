@@ -30,5 +30,6 @@ namespace wss::detail
         unsigned                                domain_signo;
         std::weak_ptr<detail::linear_table>     domain_table;
         bool                                    is_explicit                 = false;
+        bool                                    is_constant                 = false;
     };
 }

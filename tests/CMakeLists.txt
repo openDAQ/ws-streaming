@@ -1,6 +1,7 @@
 set(sources
     ./test_base64.cpp
     ./test_client.cpp
+    ./test_constant_rule.cpp
     ./test_dynamic_buffer.cpp
     ./test_http_client.cpp
     ./test_http_command_interface.cpp

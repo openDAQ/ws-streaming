@@ -48,6 +48,11 @@ std::int64_t wss::detail::linear_table::value_at(std::int64_t index) const noexc
     return _value + _delta * (index - _index);
 }
 
+std::int64_t wss::detail::linear_table::index_at(std::int64_t value) const noexcept
+{
+    return _delta ? _index + (value - _value) / _delta : _index;
+}
+
 void wss::detail::linear_table::set(std::int64_t index, std::int64_t value) noexcept
 {
     _index = index;

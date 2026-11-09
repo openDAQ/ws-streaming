@@ -22,6 +22,8 @@ namespace wss::detail
 
             std::int64_t value_at(std::int64_t index) const noexcept;
 
+            std::int64_t index_at(std::int64_t value) const noexcept;
+
             void set(std::int64_t index, std::int64_t value) noexcept;
 
             void drive_to(std::int64_t index) noexcept;
