@@ -1,4 +1,6 @@
 #include <cstddef>
+#include <cstdint>
+#include <cstring>
 #include <string>
 
 #include <boost/endian/conversion.hpp>
@@ -78,6 +80,29 @@ void wss::detail::remote_signal_impl::handle_data(
 
         if (domain_table)
             domain_table->drive_to(_value_index);
+    }
+
+    else if (_metadata.rule() == rule_types::constant_rule)
+    {
+        // each entry is the 64-bit value index from which the value holds, followed by the value
+        const auto *entry = static_cast<const std::uint8_t *>(data);
+        const auto entry_size = sizeof(std::uint64_t) + _sample_size;
+        auto domain_table = _domain_table.lock();
+
+        for (; _sample_size && size >= entry_size; entry += entry_size, size -= entry_size)
+        {
+            std::uint64_t index;
+            std::memcpy(&index, entry, sizeof(index));
+            index = boost::endian::little_to_native(index);
+
+            on_data_received(
+                domain_table ? domain_table->value_at(static_cast<std::int64_t>(index)) : 0,
+                1,
+                entry + sizeof(index),
+                _sample_size);
+        }
+
+        return;
     }
 
     else

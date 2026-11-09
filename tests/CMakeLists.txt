@@ -6,6 +6,7 @@ set(sources
     ./test_http_command_interface.cpp
     ./test_metadata.cpp
     ./test_peer_limits.cpp
+    ./test_remote_signal.cpp
     ./test_semver.cpp
     ./test_streaming_protocol.cpp
 )
