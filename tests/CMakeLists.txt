@@ -7,6 +7,7 @@ set(sources
     ./test_metadata.cpp
     ./test_peer_limits.cpp
     ./test_semver.cpp
+    ./test_server.cpp
     ./test_streaming_protocol.cpp
 )
 

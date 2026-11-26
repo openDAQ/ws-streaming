@@ -115,8 +115,13 @@ void wss::server::add_local_signal(local_signal& signal)
     if (_signals.emplace(&signal).second)
     {
         _ordered_signals.push_back(&signal);
-        for (const auto& c : _clients)
-            c.connection->add_local_signal(signal);
+
+        // a failed write closes the connection at once, which removes it from _clients
+        for (auto it = _clients.begin(); it != _clients.end();)
+        {
+            auto connection = (it++)->connection;
+            connection->add_local_signal(signal);
+        }
     }
 }
 
@@ -125,8 +130,13 @@ void wss::server::remove_local_signal(local_signal& signal)
     if (_signals.erase(&signal))
     {
         _ordered_signals.remove(&signal);
-        for (const auto& c : _clients)
-            c.connection->remove_local_signal(signal);
+
+        // a failed write closes the connection at once, which removes it from _clients
+        for (auto it = _clients.begin(); it != _clients.end();)
+        {
+            auto connection = (it++)->connection;
+            connection->remove_local_signal(signal);
+        }
     }
 }
 
