@@ -1,9 +1,9 @@
 #pragma once
 
 #include <cstdint>
+#include <deque>
 #include <functional>
 #include <memory>
-#include <set>
 #include <string>
 
 #include <boost/asio/any_io_executor.hpp>
@@ -16,6 +16,18 @@
 
 namespace wss::detail
 {
+    /**
+     * A client for the "jsonrpc-http" command interface. Requests are sent one at a time, each
+     * after the previous one is answered, so the peer runs them in call order.
+     *
+     * A request is sent once. A peer that has received a request runs it however long that takes,
+     * and the client cannot tell such a peer from one the request never reached, so a request
+     * sent again could run twice. Any HTTP response, whatever its status or body, and any error
+     * is therefore final.
+     *
+     * A request without a response ends only at the HTTP client's deadline, 30 s after it
+     * connected. The next request then goes, and can reach the peer while it still runs that one.
+     */
     class http_command_interface_client
         : public command_interface_client
     {
@@ -28,6 +40,8 @@ namespace wss::detail
                 const std::string& http_method,
                 const std::string& path,
                 const std::string& version);
+
+            ~http_command_interface_client() override;
 
             void async_request(
                 const std::string& method,
@@ -42,9 +56,18 @@ namespace wss::detail
 
         private:
 
-            void prepare_request(
-                const std::string& method,
-                const nlohmann::json& params);
+            struct request
+            {
+                std::string body;
+                std::function<
+                    void(
+                        const boost::system::error_code& ec,
+                        const nlohmann::json& response)
+                > handler;
+            };
+
+            void send_front();
+            void complete_front(const boost::system::error_code& ec, const nlohmann::json& response);
 
         private:
 
@@ -56,6 +79,8 @@ namespace wss::detail
             std::string _version;
             unsigned _next_id = 1;
 
-            std::set<std::shared_ptr<detail::http_client>> _clients;
+            std::deque<request> _requests;                  // the front one is in flight
+            std::shared_ptr<detail::http_client> _client;   // the request in flight, set while _requests is not empty
+            std::shared_ptr<int> _lifetime = std::make_shared<int>();  // expires with this object; a handler queued before that checks it first
     };
 }

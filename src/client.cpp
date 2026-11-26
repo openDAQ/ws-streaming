@@ -109,17 +109,13 @@ void wss::client::async_connect(
                 if (response.result() != boost::beast::http::status::switching_protocols)
                     return handler(boost::beast::http::error::bad_status, {});
 
-                std::string connection_local_stream_id;
-                try
-                {
-                    auto remote_endpoint = stream.socket().remote_endpoint();
-                    connection_local_stream_id = remote_endpoint.address().to_string()
-                                                 + ":" + std::to_string(remote_endpoint.port());
-                }
-                catch (const std::exception& /*e*/)
-                {
-                    return;
-                }
+                boost::system::error_code endpoint_ec;
+                auto remote_endpoint = stream.socket().remote_endpoint(endpoint_ec);
+                if (endpoint_ec)
+                    return handler(endpoint_ec, {});
+
+                std::string connection_local_stream_id = remote_endpoint.address().to_string()
+                    + ":" + std::to_string(remote_endpoint.port());
 
                 auto connection = std::make_shared<wss::connection>(
                     stream.release_socket(),
@@ -156,17 +152,13 @@ void wss::client::async_connect(
                 if (response.result() != boost::beast::http::status::switching_protocols)
                     return handler(boost::beast::http::error::bad_status, {});
 
-                std::string connection_local_stream_id;
-                try
-                {
-                    auto remote_endpoint = stream.next_layer().socket().remote_endpoint();
-                    connection_local_stream_id = remote_endpoint.address().to_string()
-                                                 + ":" + std::to_string(remote_endpoint.port());
-                }
-                catch (const std::exception& /*e*/)
-                {
-                    return;
-                }
+                boost::system::error_code endpoint_ec;
+                auto remote_endpoint = stream.next_layer().socket().remote_endpoint(endpoint_ec);
+                if (endpoint_ec)
+                    return handler(endpoint_ec, {});
+
+                std::string connection_local_stream_id = remote_endpoint.address().to_string()
+                    + ":" + std::to_string(remote_endpoint.port());
 
                 stream.next_layer().expires_never();
 
@@ -219,17 +211,13 @@ void wss::client::async_connect(
                         if (ec)
                             return handler(ec, {});
 
-                        std::string connection_local_stream_id;
-                        try
-                        {
-                            auto remote_endpoint = socket->remote_endpoint();
-                            connection_local_stream_id = remote_endpoint.address().to_string()
-                                                         + ":" + std::to_string(remote_endpoint.port());
-                        }
-                        catch (const std::exception& /*e*/)
-                        {
-                            return;
-                        }
+                        boost::system::error_code endpoint_ec;
+                        auto remote_endpoint = socket->remote_endpoint(endpoint_ec);
+                        if (endpoint_ec)
+                            return handler(endpoint_ec, {});
+
+                        std::string connection_local_stream_id = remote_endpoint.address().to_string()
+                            + ":" + std::to_string(remote_endpoint.port());
 
                         auto connection = std::make_shared<wss::connection>(
                             std::move(*socket),

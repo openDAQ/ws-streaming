@@ -292,6 +292,10 @@ void wss::connection::on_peer_closed(
 
     clear_local_signals();
 
+    // the peer is gone: its queued requests are cancelled, and the client goes with the remote signals that used it
+    if (auto client = std::move(_command_interface_client))
+        client->cancel();
+
     on_disconnected(ec);
 }
 

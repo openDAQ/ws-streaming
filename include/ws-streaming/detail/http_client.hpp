@@ -123,6 +123,7 @@ namespace wss::detail
                 handler_type handler)
             {
                 _handler = std::move(handler);
+                _cancelled = false;
 
                 request.set(boost::beast::http::field::user_agent, http_product_string());
 
@@ -147,6 +148,8 @@ namespace wss::detail
              */
             void cancel()
             {
+                // a step that already completed has its handler queued; the flag keeps it from starting the next one
+                _cancelled = true;
                 _resolver.cancel();
                 tcp_layer().cancel();
             }
@@ -165,8 +168,12 @@ namespace wss::detail
                 const boost::system::error_code& ec,
                 const boost::asio::ip::tcp::resolver::results_type& results)
             {
-                if (ec)
+                if (ec || _cancelled)
                     return complete(ec);
+
+                // one deadline for the whole request from here on, the connect included: requests go one at a time, so
+                // a connect that hangs would otherwise hold every later request for the operating system's timeout
+                tcp_layer().expires_after(std::chrono::seconds(30));
 
                 tcp_layer().async_connect(
                     results,
@@ -180,10 +187,8 @@ namespace wss::detail
             void finish_connect(
                 const boost::system::error_code& ec)
             {
-                if (ec)
+                if (ec || _cancelled)
                     return complete(ec);
-
-                tcp_layer().expires_after(std::chrono::seconds(30));
 
                 if constexpr (is_tls)
                 {
@@ -204,7 +209,7 @@ namespace wss::detail
             void finish_handshake(
                 const boost::system::error_code& ec)
             {
-                if (ec)
+                if (ec || _cancelled)
                     return complete(ec);
 
                 do_write();
@@ -225,7 +230,7 @@ namespace wss::detail
             void finish_write(
                 const boost::system::error_code& ec)
             {
-                if (ec)
+                if (ec || _cancelled)
                     return complete(ec);
 
                 _buffer.clear();
@@ -255,7 +260,7 @@ namespace wss::detail
                 if (!_handler)
                     return;
 
-                _handler(ec, _response, _stream, _buffer);
+                _handler(_cancelled ? boost::asio::error::operation_aborted : ec, _response, _stream, _buffer);
                 _handler = {};
             }
 
@@ -268,6 +273,7 @@ namespace wss::detail
             response_type _response;
 
             handler_type _handler;
+            bool _cancelled = false;
     };
 
     using http_client = basic_http_client<boost::beast::tcp_stream>;
