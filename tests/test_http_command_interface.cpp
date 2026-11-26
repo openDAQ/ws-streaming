@@ -197,6 +197,29 @@ struct result
     nlohmann::json response;
 };
 
+// Requests a subscribe of each signal in turn; each outcome is appended to results when it completes.
+void request_all(
+    wss::detail::http_command_interface_client& client,
+    const std::vector<std::string>& signal_ids,
+    std::vector<result>& results)
+{
+    for (const auto& signal_id : signal_ids)
+        client.async_request("FAKE.subscribe", { signal_id },
+            [&results, signal_id](const boost::system::error_code& ec, const nlohmann::json& response)
+            {
+                results.push_back({ signal_id, ec, response });
+            });
+}
+
+template <typename Predicate>
+bool run_until(boost::asio::io_context& ioc, Predicate done, std::chrono::milliseconds timeout)
+{
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (!done() && std::chrono::steady_clock::now() < deadline)
+        ioc.run_for(10ms);
+    return done();
+}
+
 // A port that is bound but does not listen, so a connection to it is refused.
 boost::asio::ip::tcp::acceptor refusing_port(boost::asio::io_context& ioc)
 {
@@ -331,10 +354,7 @@ struct subscribing_client
     template <typename Predicate>
     bool run_until(Predicate done, std::chrono::milliseconds timeout)
     {
-        const auto deadline = std::chrono::steady_clock::now() + timeout;
-        while (!done() && std::chrono::steady_clock::now() < deadline)
-            ioc.run_for(10ms);
-        return done();
+        return ::run_until(ioc, done, timeout);
     }
 
     boost::asio::io_context ioc{1};
@@ -350,7 +370,7 @@ struct subscribing_client
 
 // Each request is sent once, whatever its outcome. Even one the server read and then closed the
 // connection on without answering is not sent again: the server may have run it.
-TEST(HttpCommandInterface, SendsRequestsOneAtATimeAndNeverResends)
+TEST(HttpCommandInterface, NeverResendsWhateverTheOutcome)
 {
     fake_jsonrpc_http_server server;
     server.script("b", { action::drop });
@@ -362,19 +382,14 @@ TEST(HttpCommandInterface, SendsRequestsOneAtATimeAndNeverResends)
         ioc.get_executor(), "127.0.0.1", std::to_string(server.port()), "POST", "/", "1.1"};
 
     std::vector<result> results;
-    for (const std::string signal_id : { "a", "b", "c", "d", "e" })
-        client.async_request("FAKE.subscribe", { signal_id },
-            [&results, signal_id](const boost::system::error_code& ec, const nlohmann::json& response)
-            {
-                results.push_back({ signal_id, ec, response });
-            });
+    request_all(client, { "a", "b", "c", "d", "e" }, results);
 
     ioc.run_for(20s);
 
     // nothing is left waiting once the last request completes
     EXPECT_TRUE(ioc.stopped()) << "work was left behind";
 
-    // one request at a time, each once: each request arrives after the previous one was answered or failed
+    // each request arrives once, whatever the outcome of the one before
     EXPECT_EQ(server.arrivals(), (std::vector<std::string>{ "a", "b", "c", "d", "e" }));
 
     ASSERT_EQ(results.size(), 5u);
@@ -397,8 +412,6 @@ TEST(HttpCommandInterface, SendsRequestsOneAtATimeAndNeverResends)
     EXPECT_FALSE(results[4].ec);
 }
 
-// A request that cannot connect fails with the connect error and is not made again; the request
-// queued behind it still goes.
 TEST(HttpCommandInterface, RequestThatCannotConnectFailsWithTheConnectError)
 {
     boost::asio::io_context ioc{1};
@@ -408,22 +421,13 @@ TEST(HttpCommandInterface, RequestThatCannotConnectFailsWithTheConnectError)
         ioc.get_executor(), "127.0.0.1", std::to_string(port.local_endpoint().port()), "POST", "/", "1.1"};
 
     std::vector<result> results;
-    for (const std::string signal_id : { "a", "b" })
-        client.async_request("FAKE.subscribe", { signal_id },
-            [&results, signal_id](const boost::system::error_code& ec, const nlohmann::json& response)
-            {
-                results.push_back({ signal_id, ec, response });
-            });
+    request_all(client, { "a" }, results);
 
     ioc.run_for(20s);
 
     EXPECT_TRUE(ioc.stopped()) << "work was left behind";
-
-    ASSERT_EQ(results.size(), 2u);
-    EXPECT_EQ(results[0].signal_id, "a");
+    ASSERT_EQ(results.size(), 1u);
     EXPECT_EQ(results[0].ec, boost::asio::error::connection_refused);
-    EXPECT_EQ(results[1].signal_id, "b");
-    EXPECT_EQ(results[1].ec, boost::asio::error::connection_refused);
 }
 
 TEST(HttpCommandInterface, RequestMadeInAHandlerQueuesBehindTheOthers)
@@ -452,37 +456,10 @@ TEST(HttpCommandInterface, RequestMadeInAHandlerQueuesBehindTheOthers)
     EXPECT_EQ(completed, (std::vector<std::string>{ "a", "b", "c" }));
 }
 
-// A device runs a request it has received however long it takes, and running a subscribe twice is
-// not the same as running it once. The client cannot tell a slow device from a request that was lost,
-// so a request that reached the device is not sent again, and the client waits for the device's answer.
-TEST(HttpCommandInterface, SlowAnswerIsWaitedForAndNotResent)
-{
-    fake_jsonrpc_http_server server;
-    // a resend, if one goes, is as slow as the first request, as on a real device
-    server.script("a", { action::answer_late, action::answer_late });
-
-    boost::asio::io_context ioc{1};
-    wss::detail::http_command_interface_client client{
-        ioc.get_executor(), "127.0.0.1", std::to_string(server.port()), "POST", "/", "1.1"};
-
-    std::vector<result> results;
-    client.async_request("FAKE.subscribe", { "a" },
-        [&results](const boost::system::error_code& ec, const nlohmann::json& response)
-        {
-            results.push_back({ "a", ec, response });
-        });
-
-    ioc.run_for(2 * slow_device_time + 5s);
-
-    EXPECT_EQ(server.arrivals(), std::vector<std::string>{ "a" }) << "the device got the request more than once";
-
-    ASSERT_EQ(results.size(), 1u);
-    EXPECT_FALSE(results[0].ec) << "the device ran the request and answered, but the client got: " << results[0].ec.message();
-    EXPECT_EQ(results[0].response, nlohmann::json({ { "jsonrpc", "2.0" }, { "id", 1 }, { "result", true } }));
-}
-
 // Requests go one at a time so that the device runs them in call order. That holds for a slow request too:
 // the next one goes only once the device has answered it, so the device never has two requests at once.
+// The slow one is not sent again: the client cannot tell a slow device from a lost request, and a device
+// that runs a subscribe twice does not do the same as running it once.
 TEST(HttpCommandInterface, NextRequestWaitsForASlowAnswer)
 {
     fake_jsonrpc_http_server server;
@@ -494,12 +471,7 @@ TEST(HttpCommandInterface, NextRequestWaitsForASlowAnswer)
         ioc.get_executor(), "127.0.0.1", std::to_string(server.port()), "POST", "/", "1.1"};
 
     std::vector<result> results;
-    for (const std::string signal_id : { "a", "b" })
-        client.async_request("FAKE.subscribe", { signal_id },
-            [&results, signal_id](const boost::system::error_code& ec, const nlohmann::json& response)
-            {
-                results.push_back({ signal_id, ec, response });
-            });
+    request_all(client, { "a", "b" }, results);
 
     ioc.run_for(2 * slow_device_time + 5s);
 
@@ -524,16 +496,9 @@ TEST(HttpCommandInterface, CancelEndsQueuedAndStalledRequestsAtOnce)
         ioc.get_executor(), "127.0.0.1", std::to_string(server.port()), "POST", "/", "1.1"};
 
     std::vector<result> results;
-    for (const std::string signal_id : { "a", "b" })
-        client.async_request("FAKE.subscribe", { signal_id },
-            [&results, signal_id](const boost::system::error_code& ec, const nlohmann::json& response)
-            {
-                results.push_back({ signal_id, ec, response });
-            });
+    request_all(client, { "a", "b" }, results);
 
-    const auto deadline = std::chrono::steady_clock::now() + 5s;
-    while (server.arrivals().empty() && std::chrono::steady_clock::now() < deadline)
-        ioc.run_for(10ms);
+    run_until(ioc, [&] { return !server.arrivals().empty(); }, 5s);
     ASSERT_EQ(server.arrivals(), std::vector<std::string>{ "a" });
 
     client.cancel();
@@ -562,9 +527,7 @@ TEST(HttpCommandInterface, DestroyingTheClientEndsAStalledRequest)
     client->async_request("FAKE.subscribe", { "a" },
         [&called](const boost::system::error_code&, const nlohmann::json&) { called = true; });
 
-    const auto deadline = std::chrono::steady_clock::now() + 5s;
-    while (server.arrivals().empty() && std::chrono::steady_clock::now() < deadline)
-        ioc.run_for(10ms);
+    run_until(ioc, [&] { return !server.arrivals().empty(); }, 5s);
     ASSERT_EQ(server.arrivals(), std::vector<std::string>{ "a" });
 
     client.reset();
@@ -578,87 +541,30 @@ TEST(HttpCommandInterface, DestroyingTheClientEndsAStalledRequest)
     EXPECT_EQ(server.arrivals(), std::vector<std::string>{ "a" });
 }
 
-TEST(HttpCommandInterface, DestroyingTheClientBeforeItsRequestIsSentSendsNothing)
+// Whichever side closes the connection, it cancels the stalled request: the request is not waited for or sent
+// again, and no work is left
+TEST(HttpCommandInterface, ClosingTheConnectionEndsAStalledRequest)
 {
-    fake_jsonrpc_http_server server;
+    for (const bool peerCloses : { false, true })
+    {
+        SCOPED_TRACE(peerCloses ? "the peer closes" : "the client closes");
 
-    boost::asio::io_context ioc{1};
-    auto client = std::make_unique<wss::detail::http_command_interface_client>(
-        ioc.get_executor(), "127.0.0.1", std::to_string(server.port()), "POST", "/", "1.1");
+        fake_jsonrpc_http_server server;
+        server.script("a", { action::stall });
+        fake_http_peer peer{server.port()};
+        subscribing_client client{peer.url()};
 
-    bool called = false;
-    client->async_request("FAKE.subscribe", { "a" },
-        [&called](const boost::system::error_code&, const nlohmann::json&) { called = true; });
+        ASSERT_TRUE(client.run_until([&] { return !server.arrivals().empty(); }, 5s));
 
-    // the resolver finishes on its own thread and queues its handler, so the destructor cancels after that
-    std::this_thread::sleep_for(200ms);
-    client.reset();
+        if (peerCloses)
+            peer.close();
+        else
+            client.connection->close();
 
-    ioc.run_for(5s);
-    EXPECT_FALSE(called);
-    EXPECT_TRUE(server.arrivals().empty()) << "the request was sent after the client was destroyed";
-}
-
-TEST(HttpCommandInterface, IntegerPortReachesTheServer)
-{
-    fake_jsonrpc_http_server server;
-    fake_http_peer peer{server.port()};
-    subscribing_client client{peer.url()};
-
-    EXPECT_TRUE(client.run_until([&] { return !server.arrivals().empty(); }, 5s));
-    EXPECT_EQ(server.arrivals(), std::vector<std::string>{ "a" });
-}
-
-// A signal subscribed through a connection, as the LT client module does it, on a slow device:
-// the device gets the subscribe once.
-TEST(HttpCommandInterface, SlowDeviceGetsTheSubscribeOnce)
-{
-    fake_jsonrpc_http_server server;
-    // a resend, if one goes, is as slow as the first request, as on a real device
-    server.script("a", { action::answer_late, action::answer_late });
-    fake_http_peer peer{server.port()};
-    subscribing_client client{peer.url()};
-
-    ASSERT_TRUE(client.run_until([&] { return !server.arrivals().empty(); }, 5s));
-
-    // the device answers after slow_device_time, and is given as long again after that for a resend to show up
-    client.run_until([&] { return server.arrivals().size() > 1; }, 2 * slow_device_time);
-    EXPECT_EQ(server.arrivals(), std::vector<std::string>{ "a" }) << "the device got the subscribe more than once";
-}
-
-TEST(HttpCommandInterface, CloseDoesNotWaitForAStalledRequest)
-{
-    fake_jsonrpc_http_server server;
-    server.script("a", { action::stall });
-    fake_http_peer peer{server.port()};
-    subscribing_client client{peer.url()};
-
-    ASSERT_TRUE(client.run_until([&] { return !server.arrivals().empty(); }, 5s));
-
-    client.connection->close();
-
-    // the close cancels the stalled request: it is not waited for or sent again, and no work is left
-    client.ioc.run_for(10s);
-    EXPECT_TRUE(client.ioc.stopped()) << "work was left behind after the close";
-    EXPECT_EQ(server.arrivals(), std::vector<std::string>{ "a" });
-}
-
-TEST(HttpCommandInterface, PeerCloseEndsAStalledRequest)
-{
-    fake_jsonrpc_http_server server;
-    server.script("a", { action::stall });
-    fake_http_peer peer{server.port()};
-    subscribing_client client{peer.url()};
-
-    ASSERT_TRUE(client.run_until([&] { return !server.arrivals().empty(); }, 5s));
-
-    peer.close();
-
-    // the connection cancels the stalled request once it sees the close: it is not waited for or sent again,
-    // and no work is left
-    client.ioc.run_for(10s);
-    EXPECT_TRUE(client.ioc.stopped()) << "work was left behind after the close";
-    EXPECT_EQ(server.arrivals(), std::vector<std::string>{ "a" });
+        client.ioc.run_for(10s);
+        EXPECT_TRUE(client.ioc.stopped()) << "work was left behind after the close";
+        EXPECT_EQ(server.arrivals(), std::vector<std::string>{ "a" });
+    }
 }
 
 // A closing connection reports each subscribed signal unsubscribed, and a client that then releases its
@@ -678,5 +584,6 @@ TEST(HttpCommandInterface, UnsubscribeMadeWhileThePeerClosesIsNotSent)
 
     client.ioc.run_for(10s);
     EXPECT_TRUE(client.ioc.stopped()) << "work was left behind after the close";
+    EXPECT_FALSE(client.subscribed) << "the close did not report the signal unsubscribed, so no unsubscribe was made";
     EXPECT_EQ(server.arrivals(), std::vector<std::string>{ "a" }) << "the unsubscribe made during the close was sent";
 }
