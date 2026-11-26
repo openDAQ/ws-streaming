@@ -171,6 +171,10 @@ namespace wss::detail
                 if (ec || _cancelled)
                     return complete(ec);
 
+                // one deadline for the whole request from here on, the connect included: requests go one at a time, so
+                // a connect that hangs would otherwise hold every later request for the operating system's timeout
+                tcp_layer().expires_after(std::chrono::seconds(30));
+
                 tcp_layer().async_connect(
                     results,
                     [self_weak = this->weak_from_this()](const boost::system::error_code& ec, auto /*endpoint*/)
@@ -185,8 +189,6 @@ namespace wss::detail
             {
                 if (ec || _cancelled)
                     return complete(ec);
-
-                tcp_layer().expires_after(std::chrono::seconds(30));
 
                 if constexpr (is_tls)
                 {
