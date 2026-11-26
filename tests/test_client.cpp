@@ -20,7 +20,8 @@
 
 using boost::asio::ip::tcp;
 
-// The server resets the connection right after the upgrade, so the socket has no peer address any more
+// The server resets the connection right after the upgrade. Where the socket then has no peer address any more (Linux),
+// the connect handler reports the reset; where it keeps it (Windows), the connection reports it
 TEST(Client, ReportsAConnectionResetRightAfterTheUpgrade)
 {
     boost::asio::io_context server_ioc;
@@ -48,9 +49,17 @@ TEST(Client, ReportsAConnectionResetRightAfterTheUpgrade)
     boost::asio::io_context ioc;
     wss::client client{ioc.get_executor()};
     std::optional<boost::system::error_code> result;
+    std::optional<boost::system::error_code> disconnected;
+    wss::connection_ptr connection;
     client.async_connect(
         "ws://127.0.0.1:" + std::to_string(acceptor.local_endpoint().port()) + "/",
-        [&](const boost::system::error_code& ec, wss::connection_ptr) { result = ec; });
+        [&](const boost::system::error_code& ec, wss::connection_ptr c)
+        {
+            result = ec;
+            connection = c;
+            if (connection)
+                connection->on_disconnected.connect([&](const boost::system::error_code& close_ec) { disconnected = close_ec; });
+        });
 
     // the client sends the request, then reads only once the response and the reset have both arrived
     auto received = request_received.get_future();
@@ -62,5 +71,9 @@ TEST(Client, ReportsAConnectionResetRightAfterTheUpgrade)
     ioc.run_for(std::chrono::seconds(2));
 
     ASSERT_TRUE(result.has_value()) << "the connect handler was never called";
-    EXPECT_TRUE(*result);
+    if (!*result)
+    {
+        ASSERT_TRUE(disconnected.has_value()) << "the connection never reported the reset";
+        EXPECT_TRUE(*disconnected);
+    }
 }
